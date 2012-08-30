@@ -1,0 +1,12 @@
+{application, safetyvalve,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { safetyvalve_app, []}},
+  {env, []}
+ ]}.
