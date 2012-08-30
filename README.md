@@ -34,13 +34,32 @@ Where each `QDef` is a queue definition of a queue. For now all queues
 are Token Bucket Regulators with a rate limit and a poll frequency:
 
 ```
-QDef = {my_queue, [{hz, 1000}, % Repoll the queue every 1000 ms
-                   {rate, 5},  % Produce 5 requests per second
+QDef = {my_queue, [{hz, 1000}, % Poll the queue every 1000 ms
+                   {rate, 5},  % Produce 5 requests per poll
                    {token_limit, 15}, % Allow a 15 token burst
                    {size, 60}, % Keep at most 60 tasks waiting
-                   {concurrenty, 3}] % Start at most 3 jobs simultaneously
+                   {concurrency, 3}] % Start at most 3 jobs simultaneously
 ```
-                   
+
+The configuration will tell the queue to poll once every 1000ms via
+the `hz` value. Setting this value lower makes the queue reconsider
+its tokens more often, with a less jagged performance as a result.
+Setting this value too low may however make your Erlang VM spend a
+high amount of time in a poller loop, doing essentially nothing.
+
+The `rate` is the number of tokens to add per poll.
+
+The `token_limit` configures how many tokens there can be in the
+bucket at a given point in time. This allows you to "burst" out
+quickly in the beginning.
+
+The `size` parameter configures the size of the queue (*NOTE*:
+Currently we can't honor this).
+
+The `concurrency` parameter configures how many concurrent jobs/tasks
+this queue will allow once a task has gotten the "go" signal. (*NOTE*:
+Currently we ignore this value).
+
 # License
 
 MIT
