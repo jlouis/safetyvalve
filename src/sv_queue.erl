@@ -2,7 +2,21 @@
 %%% @author Jesper Louis Andersen <>
 %%% @copyright (C) 2012, Jesper Louis Andersen
 %%% @doc
+%%% Queue Protocol:
 %%%
+%%% The queue is implemented as a gen_server with a simple ask/done
+%%% protocol. A worker can send the server an `ask' message which means you
+%%% ask to get a token for doing work. This will block the worker
+%%% until either:
+%%%   * Timeout. You were queued for too long as per queue configuration.
+%%%   * Queue full. The queue already has too many workers in it
+%%%   * Opaque Ref - the worker is now monitored and ready to do work.
+%%%
+%%% Once granted the opaque reference, the worker can start doing work.
+%%% When the worker is done, the protocol mandates that you either
+%%% send the message `{done, Ref}' where `Ref' is the opaque
+%%% reference, or that you exit the process. In the latter case the
+%%% monitor from the queue process ensures that we can continue.
 %%% @end
 %%% Created : 30 Aug 2012 by Jesper Louis Andersen <>
 %%%-------------------------------------------------------------------
