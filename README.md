@@ -60,6 +60,16 @@ The `concurrency` parameter configures how many concurrent jobs/tasks
 this queue will allow once a task has gotten the "go" signal. (*NOTE*:
 Currently we ignore this value).
 
+Then, to get jobs onto this queue, do the following
+
+```
+Res = sv:run(my_queue, fun work/0)
+```
+
+The result value `Res` will either be the output of the `work/0`
+function or the tuple `{error, Reason}` if there is some overload
+condition preventing it from running.
+
 # License
 
 MIT
