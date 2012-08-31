@@ -13,7 +13,7 @@ run(Name, Fun) ->
     case sv_queue:ask(Name) of
         {go, Ref} ->
             Res = Fun(),
-            sv_queue:done(Ref),
+            sv_queue:done(Name, Ref),
             Res;
         {error, Reason} ->
             {error, Reason}
