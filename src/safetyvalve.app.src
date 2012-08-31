@@ -1,8 +1,8 @@
 {application, safetyvalve,
  [
-  {description, ""},
-  {vsn, "1"},
-  {registered, []},
+  {description, "A safety valve for your erlang node"},
+  {vsn, "0.1.0"},
+  {registered, [safetyvalve_sup]},
   {applications, [
                   kernel,
                   stdlib,
