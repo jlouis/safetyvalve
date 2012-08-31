@@ -1,4 +1,4 @@
-{logdir, "logs"}.
+{logdir, "../log"}.
 {config, "test.config"}.
 {alias, test, "../test"}.
 {cover, "sv.cover"}.
