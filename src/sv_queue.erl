@@ -107,8 +107,8 @@ handle_call(ask, From, #state { tokens = 0,
     %% No more tokens, queue the guy
     {noreply, State#state { queue = queue:in(From, Q) }};
 handle_call({done, Ref}, _From, #state { tasks = Tasks } = State) ->
-    erlang:demonitor(process, Ref),
-    {reply, ok, State#state { tasks = gb_trees:del_element(Ref, Tasks)}};
+    true = erlang:demonitor(Ref),
+    {reply, ok, State#state { tasks = gb_sets:del_element(Ref, Tasks)}};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
