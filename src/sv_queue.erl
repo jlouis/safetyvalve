@@ -119,7 +119,7 @@ handle_cast(_Msg, State) ->
 
 %% @private
 handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
-    {noreply, State#state { tasks = gb_trees:del_element(Ref, TS) }};
+    {noreply, State#state { tasks = gb_sets:del_element(Ref, TS) }};
 handle_info(poll, #state { conf = C } = State) ->
     lager:debug("Poll invoked"),
     NewState = process_queue(refill_tokens(State)),
@@ -147,7 +147,7 @@ process_queue(#state { queue = Q, tokens = K, tasks = Ts } = State) ->
 process_queue(0, Q, TS) -> {0, Q, TS};
 process_queue(K, Q, TS) ->
     case queue:out(Q) of
-        {value, {Pid, _} = From, Q2} ->
+        {{value, {Pid, _} = From}, Q2} ->
             Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
             process_queue(K-1, Q2, gb_sets:add_element(Ref, TS));

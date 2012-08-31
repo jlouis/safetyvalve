@@ -7,7 +7,7 @@
 	 init_per_suite/1, end_per_suite/1,
 	 init_per_testcase/2, end_per_testcase/2]).
 
--export([ping/1, through/1]).
+-export([ping/1, through/1, many_through/1]).
 
 suite() ->
     [{timetrap, {seconds, 30}}].
@@ -39,7 +39,7 @@ end_per_testcase(_Case, _Config) ->
 %% Tests
 %% ----------------------------------------------------------------------
 groups() ->
-    [{basic, [shuffle], [ping, through]}].
+    [{basic, [shuffle], [ping, through, many_through]}].
 
 all() ->
     [{group, basic}].
@@ -50,7 +50,27 @@ ping(_Config) ->
 through(_Config) ->
     ok = sv:run(test_queue_1, fun work/0).
 
+many_through(_Config) ->
+    Parent = self(),
+    Pids = [spawn_link(fun() ->
+                               ok = sv:run(test_queue_1, fun work/0),
+                               Parent ! {done, self()}
+                       end) || _ <- lists:seq(1, 20)],
+    ok = collect(Pids).
+
 %% ----------------------------------------------------------------------
+collect([]) ->
+    ok;
+collect(Pids) when is_list(Pids) ->
+    receive
+        {done, Pid} ->
+            collect(Pids -- [Pid])
+    after 5000 ->
+            {error, timeout}
+    end.
+
+    
+
 work() ->
     timer:sleep(30),
     ok.
