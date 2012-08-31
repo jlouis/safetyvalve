@@ -24,10 +24,25 @@
 -define(SERVER, ?MODULE). 
 
 -record(conf, { hz, rate, token_limit, size, concurrency }).
--record(state, { conf,
-                 queue,
-                 tokens,
-                 tasks }).
+-record(state, {
+          %% Conf is the configuration object this queue is configured
+          %% with. It is a place to query about conf options
+          conf,
+          
+          %% Queue reference to the queue we have of workers that are
+          %% waiting to be allowed to execute. Also maintains the
+          %% current queue size.
+          queue,
+          
+          %% Tokens is a counter of how many tokens that are in the
+          %% Token Bucket Regulator right now.
+          tokens,
+          
+          %% Tasks is a set which contains the monitor references on
+          %% the currently executing tasks. It is used to make sure
+          %% that we maintain the concurrency limit correctly if tasks
+          %% crash. Also keeps track of the current task concurrency value
+          tasks }).
 
 %%%===================================================================
 %%% API
