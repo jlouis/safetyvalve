@@ -10,7 +10,7 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(QCHILD(I, C, Type), {I, {I, start_link, [C]},
+-define(QCHILD(I, C, Type), {I, {sv_queue, start_link, [I, C]},
                              permanent, 5000, Type, [I]}).
 
 %% ===================================================================
