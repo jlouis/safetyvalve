@@ -7,10 +7,10 @@
 	 init_per_suite/1, end_per_suite/1,
 	 init_per_testcase/2, end_per_testcase/2]).
 
--export([ping/1]).
+-export([ping/1, through/1]).
 
 suite() ->
-    [{timetrap, {minutes, 3}}].
+    [{timetrap, {seconds, 30}}].
 
 %% Setup/Teardown
 %% ----------------------------------------------------------------------
@@ -39,10 +39,18 @@ end_per_testcase(_Case, _Config) ->
 %% Tests
 %% ----------------------------------------------------------------------
 groups() ->
-    [{basic, [shuffle], [ping]}].
+    [{basic, [shuffle], [ping, through]}].
 
 all() ->
     [{group, basic}].
 
 ping(_Config) ->
+    ok.
+
+through(_Config) ->
+    ok = sv:run(test_queue_1, fun work/0).
+
+%% ----------------------------------------------------------------------
+work() ->
+    timer:sleep(30),
     ok.
