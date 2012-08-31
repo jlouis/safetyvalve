@@ -38,7 +38,7 @@ QDef = {my_queue, [{hz, 1000}, % Poll the queue every 1000 ms
                    {rate, 5},  % Produce 5 requests per poll
                    {token_limit, 15}, % Allow a 15 token burst
                    {size, 60}, % Keep at most 60 tasks waiting
-                   {concurrency, 3}] % Start at most 3 jobs simultaneously
+                   {concurrency, 3}]} % Start at most 3 jobs simultaneously
 ```
 
 The configuration will tell the queue to poll once every 1000ms via
