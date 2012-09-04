@@ -54,8 +54,7 @@
 %% {1, 0, 1} -> queue -> {1, 1, 1}
 
 %% 8. Done - no more work
-%% {1, 0, 0} -> done -> {0, 0, 0}
-%% {1, 0, 1} -> done -> {0, 0, 1}
+%% {1, 0, x} -> done -> {0, 0, x}
 
 %% 9. Done - no more tokens
 %% {1, 1, 0} -> done -> {0, 1, 0}
@@ -117,88 +116,100 @@ poll_to_work_pre(#state { tokens = T, queue_size = QS, concurrency = C }) ->
 
 poll_to_work_next(S) ->
     S#state { concurrency = 1, queue_size = 0, tokens = 0 }.
-   
-%% SPAWNING A NEW PROCESS
+
+%% ENQUEUEING
 %% ----------------------------------------------------------------------
-%% We may spawn a new worker who will try to go the queue for work.
-%% There is a couple of different cases, depending on the possible
-%% states of the worker.
 
-%% Case 1: The queue is empty and the worker will spawn to do work.
-spawn_new_empty_q_command() ->
-    {call, ?MODULE, spawn_new_process, []}.
+%%%% Case 4: Enqueueing on a full queue
+enqueue_full() ->
+    todo.
 
-%% We may only make a spawn on an empty queue, when the concurrency
-%% level is 0 and the queue size is 0. Furthermore, there should be a
-%% token we can consume.
-spawn_new_empty_q_pre(#state { concurrency = 0,
-                               queue_size  = 0,
-                               tokens      = 1 }) -> true;
-spawn_new_empty_q_pre(_) -> false.
+enqueue_full_command(_S) ->
+    {call, ?MODULE, enqueue_full, []}.
 
-%% When this call succeeds, you have a single worker doing work, and
-%% you still have a queue size which is empty.
-spawn_new_empty_q_next(#state { concurrency = 0,
-                                queue_size  = 0 } = State, _V, []) ->
-    State#state { concurrency = 1, queue_size = 0, tokens = 0 }.
+enqueue_full_pre(#state { queue_size = QS }) -> QS == 1.
 
-%% Case 2: The there is a worker, so we will queue
-spawn_new_doing_work_command(_S) ->
-    {call, ?MODULE, spawn_new_process, []}.
+enqueue_full_next(S) -> S.
 
-%% We can only queue when there is a worker doing work already.
-spawn_new_doing_work_pre(#state { concurrency = 1,
-                                  queue_size = 0,
-                                  tokens = 1}) -> true;
-spawn_new_doing_work_pre(_) -> false.
+%%%% Case 5: Enqueuing when there is no available token
+enqueue_no_token() ->
+    todo.
 
-spawn_new_doing_work_next(#state { queue_size = 0 } = State, _V, []) ->
-    State#state { queue_size = 1 }.
+enqueue_no_token_command(_S) ->
+    {call, ?MODULE, enqueue_no_token, []}.
 
-%% Case 3: A new worker is denied access since the queue is full
-spawn_new_queue_full_command(_S) ->
-    {call, ?MODULE, spawn_new_process, []}.
+enqueue_no_token_pre(#state { tokens = T }) -> T == 0.
 
-%% This will only happen when we are doing work and the queue is
-%% already full.
-spawn_new_queue_full_pre(#state { concurrency = 1, queue_size = 1 }) -> true;
-spawn_new_queue_full_pre(_) -> false.
+enqueue_no_tokens_next(S) -> S#state { queue_size = 1 }.
 
-%% TODO: Postcondition check on the denial here.
+%%%% Case 6: Enqueueing when there is a token and no worker
+enqueue_to_work() ->
+    todo.
+
+enqueue_to_work_command(_S) ->
+    {call, ?MODULE, enqueue_to_work, []}.
+
+enqueue_to_work_pre(#state { tokens = 1, queue_size = 0, concurrency = 0 }) ->
+    true;
+enqueue_to_work_pre(_) -> false.
+
+enqueue_to_work_next(S) ->
+    S#state { tokens = 0, queue_size = 0, concurrency = 1 }.
+
+%%%% Case 7: Enqueueing when there is a worker    
+enqueue_to_wait() ->
+    todo.
+
+enqueue_to_wait_command(_S) ->
+    {call, ?MODULE, enqueue_to_wait, []}.
+
+enqueue_to_wait_pre(#state { tokens = 1, queue_size = 0, concurrency = 1 }) ->
+    true;
+enqueue_to_wait_pre(_) -> false.
+
+enqueue_to_wait_next(S) ->
+    S#state { queue_size = 1 }.
 
 %% MARKING WORK AS DONE
 %% ----------------------------------------------------------------------
-mark_done() ->
+
+%%%% Case 8: Done no more work
+done_no_work() ->
     todo.
 
-%% Again, when work is being marked as done by a process, we want to
-%% be able to split on different cases in the model, depending on what
-%% is happening.
+done_no_work_command(_S) ->
+    {call, ?MODULE, done_no_work, []}.
 
-%% Case 1: The queue is now empty and we are done with the last amount
-%% of work.
-mark_done_empty_q_command(_S) ->
-    {call, ?MODULE, mark_done, []}.
+done_no_work_pre(#state { concurrency = 1, queue_size = 0 }) ->
+    true;
+done_no_work_pre(_) -> false.
 
-mark_done_empty_q_pre(#state { concurrency = 1, queue_size = 0}) -> true;
-mark_done_empty_q_pre(_) -> false.
+done_no_work_next(S) -> S#state { concurrency = 0 }.
 
-mark_done_empty_q_next(#state { concurrency = 1, queue_size = 0 } = State,
-                       _V,
-                       []) ->
-    State#state { concurrency = 0 }.
+%%%% Case 9: Done, no more tokens
+done_no_tokens() ->
+    todo.
 
-%% Case 2: Done, but there is a waiter in the queue. This means that
-%% the waiter is now the process doing work on the queue.
-mark_done_waiter_command(_S) ->
-    {call, ?MODULE, mark_done, []}.
+done_no_tokens_command(_S) ->
+    {call, ?MODULE, done_no_tokens, []}.
 
-mark_done_waiter_pre(#state { concurrency = 1, queue_size = 1}) -> true;
-mark_done_waiter_pre(_) -> false.
+done_no_tokens_pre(#state { concurrency = 1, queue_size = 1, tokens = 0 }) ->
+    true;
+done_no_tokens_pre(_) -> false.
 
-mark_done_waiter_next(#state { concurrency = 1, queue_size = 1 } = State,
-                      _V,
-                      []) ->
-    State#state { concurrency = 1,
-                  queue_size = 0 }.
+done_no_tokens_next(S) -> S#state { concurrency = 0 }.
+
+%%%% Case 10: Done, run next
+done_go_on() ->
+    todo.
+
+done_go_on_command(_S) ->
+    {call, ?MODULE, done_go_on, []}.
+
+done_go_on_pre(#state { concurrency = 1, queue_size = 1, tokens = 1 }) ->
+    true;
+done_go_on_pre(_) -> false.
+
+done_go_on_next(S) ->
+    S#state { queue_size = 0, tokens = 0 }.
 
