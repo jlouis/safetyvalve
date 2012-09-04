@@ -29,32 +29,42 @@
 %% The record state are 0/1 values on concurrency, queue size and
 %% tokens. These mandate when you can expect a certain command to be possible
 %% and also captures the possible transition states on the queue:
-%% {0, 0, 0} -> poll -> {0, 0, 1}
-%% {0, 0, 0} -> queue -> {0, 1, 0}
 
-%% {0, 0, 1} -> poll -> {0, 0, 1}
-%% {0, 0, 1} -> queue -> {0, 1, 1}
+%% 1. Poll when full
+%% {x, y, 1} -> poll -> {x, y, 1}
 
-%% {0, 1, 0} -> poll -> {1, 0, 0}
-%% {0, 1, 0} -> queue -> {0, 1, 0} (denied)
+%% 2. poll, no queue ready
+%% {x, 0, 0} -> poll -> {x, 0, 1}
+
+%% 3. poll, queue ready
+%% {0, 1, 0} -> poll-> {1, 0, 0}
+
+%% 4. Full queue cases
+%% {x, 1, y} -> queue -> {x, 1, y} (denied)
 %% {0, 1, 1} -> *impossible* - should immediately go to {1, 0, 0}
 
-%% {1, 0, 0} -> poll -> {1, 0, 1}
+%% 5. Queue, no tokens
 %% {1, 0, 0} -> queue -> {1, 1, 0}
-%% {1, 0, 0} -> done -> {0, 0, 0}
+%% {0, 0, 0} -> queue -> {0, 1, 0}
 
-%% {1, 0, 1} -> poll -> {1, 0, 1}
+%% 6. Queue, to work
+%% {0, 0, 1} -> queue -> {1, 0, 0}
+
+%% 7. Queue, wait for worker
 %% {1, 0, 1} -> queue -> {1, 1, 1}
+
+%% 8. Done - no more work
+%% {1, 0, 0} -> done -> {0, 0, 0}
 %% {1, 0, 1} -> done -> {0, 0, 1}
 
-%% {1, 1, 0} -> poll -> {1, 1, 1}
-%% {1, 1, 0} -> queue -> {1, 1, 0} (denied)
+%% 9. Done - no more tokens
 %% {1, 1, 0} -> done -> {0, 1, 0}
 
-%% {1, 1, 1} -> poll -> {1, 1, 1}
-%% {1, 1, 1} -> queue -> {1, 1, 1} (denied)
+%% 10. Done - with tokens
 %% {1, 1, 1} -> done -> {1, 0, 0}
-%%
+
+%% All in all, there are 10 possible transition commands available to
+%% us when we are testing this. 
 -record(state,
         { concurrency,
           queue_size,
@@ -65,26 +75,49 @@
 initial_state() ->
     #state { concurrency = 0,
              queue_size  = 0,
-             tokens      = 1 %% Initialized to the rate of the queue }.
+             tokens      = 1 }. %% Initialized to the rate of the queue
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
-%% We may always poll the queue. This means we advance time on the
-%% queue and ask it to add more tokens to its bucket regulator.
-poll() ->
-    sv_queue_test_1 ! poll.
 
-poll_command(_S) ->
-    {call, ?MODULE, poll, []}.
+%%%% Case 1: polling the queue, when the token bucket is full
+poll_full() ->
+    todo.
 
-%% We state that you may always poll the queue and give it more
-%% tokens. That is, in any possible state, time could pass without
-%% anything happening.
-poll_pre(_S) -> true.
+poll_full_command(_S) ->
+    {call, ?MODULE, poll_full, []}.
 
-poll_next(#state { tokens = T} = State) ->
-    State#state { tokens = min(1, T+1) }.
+%% This case matches, when the token bucket is full
+poll_full_pre(#state { tokens = T }) -> T == 1.
 
+poll_full_next(S) -> S.
+
+%%%% Case 2: polling the queue, when there is no-one queued
+poll_empty_q() ->
+    todo.
+
+pull_empty_q_command(_S) ->
+    {call, ?MODULE, poll_empty_q, []}.
+
+%% This case matches if we are lacking a token and the queue is empty
+poll_empty_q_pre(#state { tokens = T, queue_size = QS }) ->
+    T == 0 andalso QS == 0.
+
+poll_empty_q_next(S) -> S#state { tokens = 1 }.
+
+%%%% Case 3: polling the queue, when there is a waiter and no-one working
+poll_to_work() ->
+    todo.
+
+poll_to_work_command(_S) ->
+    {call, ?MODULE, poll_to_work, []}.
+
+poll_to_work_pre(#state { tokens = T, queue_size = QS, concurrency = C }) ->
+    T == 0 andalso QS == 1 andalso C == 0.
+
+poll_to_work_next(S) ->
+    S#state { concurrency = 1, queue_size = 0, tokens = 0 }.
+   
 %% SPAWNING A NEW PROCESS
 %% ----------------------------------------------------------------------
 %% We may spawn a new worker who will try to go the queue for work.
