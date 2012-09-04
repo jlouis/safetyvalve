@@ -23,6 +23,7 @@
 
 -compile([export_all]).
 
+-include_lib("eqc/include/eqc.hrl").
 -include_lib("eqc/include/eqc_statem.hrl").
 -eqc_group_commands(true).
 
@@ -89,20 +90,20 @@ poll_full_command(_S) ->
 %% This case matches, when the token bucket is full
 poll_full_pre(#state { tokens = T }) -> T == 1.
 
-poll_full_next(S) -> S.
+poll_full_next(S, _, _) -> S.
 
 %%%% Case 2: polling the queue, when there is no-one queued
 poll_empty_q() ->
     todo.
 
-pull_empty_q_command(_S) ->
+poll_empty_q_command(_S) ->
     {call, ?MODULE, poll_empty_q, []}.
 
 %% This case matches if we are lacking a token and the queue is empty
 poll_empty_q_pre(#state { tokens = T, queue_size = QS }) ->
     T == 0 andalso QS == 0.
 
-poll_empty_q_next(S) -> S#state { tokens = 1 }.
+poll_empty_q_next(S, _, _) -> S#state { tokens = 1 }.
 
 %%%% Case 3: polling the queue, when there is a waiter and no-one working
 poll_to_work() ->
@@ -114,7 +115,7 @@ poll_to_work_command(_S) ->
 poll_to_work_pre(#state { tokens = T, queue_size = QS, concurrency = C }) ->
     T == 0 andalso QS == 1 andalso C == 0.
 
-poll_to_work_next(S) ->
+poll_to_work_next(S, _, _) ->
     S#state { concurrency = 1, queue_size = 0, tokens = 0 }.
 
 %% ENQUEUEING
@@ -129,18 +130,18 @@ enqueue_full_command(_S) ->
 
 enqueue_full_pre(#state { queue_size = QS }) -> QS == 1.
 
-enqueue_full_next(S) -> S.
+enqueue_full_next(S, _, _) -> S.
 
 %%%% Case 5: Enqueuing when there is no available token
-enqueue_no_token() ->
+enqueue_no_tokens() ->
     todo.
 
-enqueue_no_token_command(_S) ->
-    {call, ?MODULE, enqueue_no_token, []}.
+enqueue_no_tokens_command(_S) ->
+    {call, ?MODULE, enqueue_no_tokens, []}.
 
-enqueue_no_token_pre(#state { tokens = T }) -> T == 0.
+enqueue_no_tokens_pre(#state { tokens = T }) -> T == 0.
 
-enqueue_no_tokens_next(S) -> S#state { queue_size = 1 }.
+enqueue_no_tokens_next(S, _, _) -> S#state { queue_size = 1 }.
 
 %%%% Case 6: Enqueueing when there is a token and no worker
 enqueue_to_work() ->
@@ -153,7 +154,7 @@ enqueue_to_work_pre(#state { tokens = 1, queue_size = 0, concurrency = 0 }) ->
     true;
 enqueue_to_work_pre(_) -> false.
 
-enqueue_to_work_next(S) ->
+enqueue_to_work_next(S, _, _) ->
     S#state { tokens = 0, queue_size = 0, concurrency = 1 }.
 
 %%%% Case 7: Enqueueing when there is a worker    
@@ -167,7 +168,7 @@ enqueue_to_wait_pre(#state { tokens = 1, queue_size = 0, concurrency = 1 }) ->
     true;
 enqueue_to_wait_pre(_) -> false.
 
-enqueue_to_wait_next(S) ->
+enqueue_to_wait_next(S, _, _) ->
     S#state { queue_size = 1 }.
 
 %% MARKING WORK AS DONE
@@ -184,7 +185,7 @@ done_no_work_pre(#state { concurrency = 1, queue_size = 0 }) ->
     true;
 done_no_work_pre(_) -> false.
 
-done_no_work_next(S) -> S#state { concurrency = 0 }.
+done_no_work_next(S, _, _) -> S#state { concurrency = 0 }.
 
 %%%% Case 9: Done, no more tokens
 done_no_tokens() ->
@@ -197,7 +198,7 @@ done_no_tokens_pre(#state { concurrency = 1, queue_size = 1, tokens = 0 }) ->
     true;
 done_no_tokens_pre(_) -> false.
 
-done_no_tokens_next(S) -> S#state { concurrency = 0 }.
+done_no_tokens_next(S, _, _) -> S#state { concurrency = 0 }.
 
 %%%% Case 10: Done, run next
 done_go_on() ->
@@ -210,6 +211,20 @@ done_go_on_pre(#state { concurrency = 1, queue_size = 1, tokens = 1 }) ->
     true;
 done_go_on_pre(_) -> false.
 
-done_go_on_next(S) ->
+done_go_on_next(S, _, _) ->
     S#state { queue_size = 0, tokens = 0 }.
 
+%% PROPERTIES
+%% ----------------------------------------------------------------------
+
+%% Check that the model can run
+prop_model() ->
+    ?FORALL(Cmds, commands(?MODULE),
+            ?TRAPEXIT(
+               begin
+                   {History, State, Result} = run_commands(?MODULE, Cmds),
+                   ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
+                                       [History, State, Result]),
+                              aggregate(command_names(Cmds), Result =:= ok))
+               end)
+           ).
