@@ -85,7 +85,8 @@ initial_state() ->
 
 %%%% Case 1: polling the queue, when the token bucket is full
 poll_full() ->
-    sv_queue:poll(?Q).
+    sv_queue:poll(?Q),
+    sv_queue:q(?Q, tokens).
 
 poll_full_command(_S) ->
     {call, ?MODULE, poll_full, []}.
@@ -94,6 +95,9 @@ poll_full_command(_S) ->
 poll_full_pre(#state { tokens = T }) -> T == 1.
 
 poll_full_next(S, _, _) -> S.
+
+poll_full_post(_S, [], 1) -> true;
+poll_full_post(_S, _, _) -> {error, wrong_token_count}.
 
 %%%% Case 2: polling the queue, when there is no-one queued
 poll_empty_q() ->
