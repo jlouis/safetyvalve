@@ -235,9 +235,14 @@ prop_model() ->
     ?FORALL(Cmds, commands(?MODULE),
             ?TRAPEXIT(
                begin
+                   application:start(safetyvalve),
                    {History, State, Result} = run_commands(?MODULE, Cmds),
+                   application:stop(safetyvalve),
                    ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
                                        [History, State, Result]),
-                              aggregate(command_names(Cmds), Result =:= ok))
+                             aggregate(command_names(Cmds), Result =:= ok))
                end)
            ).
+
+t() ->
+    eqc:module({numtests, 100}, ?MODULE).

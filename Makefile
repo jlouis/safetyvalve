@@ -26,3 +26,4 @@ ct: ct_setup compile
 	    -config ct/test.config \
             -dir test \
             -s ct_run script_start -s erlang halt
+
