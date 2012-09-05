@@ -29,7 +29,7 @@
 
 -export([parse_configuration/1]).
 
--export([ask/1, done/2]).
+-export([poll/1, ask/1, done/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -80,6 +80,9 @@ ask(Name) ->
 
 done(Name, Ref) ->
     gen_server:call(Name, {done, Ref}).
+
+poll(Name) ->
+    Name ! poll.
 
 %%%===================================================================
 
