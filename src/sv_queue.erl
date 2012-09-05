@@ -29,7 +29,7 @@
 
 -export([parse_configuration/1]).
 
--export([poll/1, ask/1, done/2]).
+-export([poll/1, ask/1, done/2, q/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -76,13 +76,16 @@ parse_configuration(Conf) ->
             concurrency = proplists:get_value(concurrency, Conf) }.
 
 ask(Name) ->
-    gen_server:call(Name, ask).
+    gen_server:call(Name, ask, infinity).
 
 done(Name, Ref) ->
-    gen_server:call(Name, {done, Ref}).
+    gen_server:call(Name, {done, Ref}, infinity).
 
 poll(Name) ->
     Name ! poll.
+
+q(Name, Atom) ->
+    gen_server:call(Name, {q, Atom}).
 
 %%%===================================================================
 
@@ -99,6 +102,8 @@ init([Conf]) ->
                  tasks = gb_sets:empty() }}.
 
 %% @private
+handle_call({q, tokens}, _, #state { tokens = K } = State) ->
+    {reply, K, State};
 handle_call(ask, {Pid, _Tag}, #state { tokens = K,
                                        tasks = Tasks } = State) when K > 0 ->
     %% Let the guy run, since we have excess tokens:
