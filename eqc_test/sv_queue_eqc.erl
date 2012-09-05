@@ -101,7 +101,8 @@ poll_full_post(_S, _, _) -> {error, wrong_token_count}.
 
 %%%% Case 2: polling the queue, when there is no-one queued
 poll_empty_q() ->
-    todo.
+    sv_queue:poll(?Q),
+    sv_queue:q(?Q, tokens).
 
 poll_empty_q_command(_S) ->
     {call, ?MODULE, poll_empty_q, []}.
@@ -111,6 +112,9 @@ poll_empty_q_pre(#state { tokens = T, queue_size = QS }) ->
     T == 0 andalso QS == 0.
 
 poll_empty_q_next(S, _, _) -> S#state { tokens = 1 }.
+
+poll_empty_q_post(_S, [], 1) -> true;
+poll_empty_q_post(_S, [], _) -> {error, poll_empty_q_post}.
 
 %%%% Case 3: polling the queue, when there is a waiter and no-one working
 poll_to_work() ->
