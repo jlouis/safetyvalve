@@ -70,6 +70,8 @@
           queue_size,
           tokens }).
 
+-define(Q, test_queue_1).
+
 %% The intial queue state
 %% ----------------------------------------------------------------------
 initial_state() ->
@@ -77,12 +79,13 @@ initial_state() ->
              queue_size  = 0,
              tokens      = 1 }. %% Initialized to the rate of the queue
 
+
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
 
 %%%% Case 1: polling the queue, when the token bucket is full
 poll_full() ->
-    todo.
+    sv_queue:poll(?Q).
 
 poll_full_command(_S) ->
     {call, ?MODULE, poll_full, []}.
@@ -245,4 +248,7 @@ prop_model() ->
            ).
 
 t() ->
-    eqc:module({numtests, 100}, ?MODULE).
+    application:start(syntax_tools),
+    application:start(compiler),
+    application:start(lager),
+    eqc:module({numtests, 1000}, ?MODULE).

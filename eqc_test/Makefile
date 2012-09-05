@@ -1,2 +1,2 @@
 console:
-	erl -pa ../ebin . -config test.config
+	erl -pa ../ebin ../deps/lager/ebin . -config test.config

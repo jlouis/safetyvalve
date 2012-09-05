@@ -165,6 +165,7 @@ refill_tokens(#state { tokens = K,
                                       token_limit = TL }} = State) ->
     TokenCount = min(K + Rate, TL),
     State#state { tokens = TokenCount }.
-    
+
+repoll(#conf { hz = undefined }) -> ok;
 repoll(#conf { hz = Hz }) ->
     erlang:send_after(Hz, self(), poll).
