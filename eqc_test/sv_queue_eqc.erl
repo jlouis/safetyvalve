@@ -227,14 +227,14 @@ done_go_on_next(S, _, _) ->
 
 %% WEIGHTS
 %% ----------------------------------------------------------------------
-weight(_S, enqueue_no_tokens) -> 100;
+weight(_S, enqueue_no_tokens) -> 80;
 weight(_S, enqueue_full)      -> 100;
 weight(_S, poll_full)         -> 100;
 weight(_S, enqueue_to_work)   -> 100;
 weight(_S, poll_empty_q)      -> 100;
 weight(_S, done_no_work)      -> 100;
 weight(_S, poll_to_work)      -> 150;
-weight(_S, done_no_tokens)    -> 200;
+weight(_S, done_no_tokens)    -> 800;
 weight(_S, enqueue_to_wait)   -> 800;
 weight(_S, done_go_on)        -> 1500.
 
