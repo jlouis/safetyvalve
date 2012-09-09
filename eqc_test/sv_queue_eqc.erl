@@ -166,7 +166,9 @@ enqueue_no_tokens_post(_S, [], Res) -> {error, {enqueue_no_tokens, Res}}.
 
 %%%% Case 6: Enqueueing when there is a token and no worker
 enqueue_to_work() ->
-    todo.
+    {ok, Pid} = manager:spawn_worker(),
+    eqc_helpers:fixpoint([whereis(manager), Pid]),
+    manager:read_status(Pid).
 
 enqueue_to_work_command(_S) ->
     {call, ?MODULE, enqueue_to_work, []}.
@@ -178,10 +180,15 @@ enqueue_to_work_pre(_) -> false.
 enqueue_to_work_next(S, _, _) ->
     S#state { tokens = 0, queue_size = 0, concurrency = 1 }.
 
+enqueue_to_work_post(_S, [], {working, _}) -> true;
+enqueue_to_work_post(_S, [], Res) -> {error, {enqueue_to_work, Res}}.
+
 %%%% Case 7: Enqueueing when there is a worker    
 enqueue_to_wait() ->
-    todo.
-
+    {ok, Pid} = manager:spawn_worker(),
+    eqc_helpers:fixpoint([whereis(manager), Pid]),
+    manager:read_status(Pid).
+    
 enqueue_to_wait_command(_S) ->
     {call, ?MODULE, enqueue_to_wait, []}.
 
@@ -191,6 +198,9 @@ enqueue_to_wait_pre(_) -> false.
 
 enqueue_to_wait_next(S, _, _) ->
     S#state { queue_size = 1 }.
+
+enqueue_to_wait_post(_S, [], queueing) -> true;
+enqueue_to_wait_post(_S, [], Res) -> {error, {enqueue_to_work, Res}}.
 
 %% MARKING WORK AS DONE
 %% ----------------------------------------------------------------------
