@@ -134,7 +134,9 @@ poll_to_work_next(S, _, _) ->
 
 %%%% Case 4: Enqueueing on a full queue
 enqueue_full() ->
-    todo.
+    {ok, Pid} = manager:spawn_worker(),
+    eqc_helpers:fixpoint([whereis(manager), Pid]),
+    manager:read_status(Pid).
 
 enqueue_full_command(_S) ->
     {call, ?MODULE, enqueue_full, []}.
@@ -143,9 +145,14 @@ enqueue_full_pre(#state { queue_size = QS }) -> QS == 1.
 
 enqueue_full_next(S, _, _) -> S.
 
+enqueue_full_post(_S, [], {error, queue_full}) -> true;
+enqueue_full_post(_S, [], _) -> {error, enqueue_full_post}.
+
 %%%% Case 5: Enqueuing when there is no available token
 enqueue_no_tokens() ->
-    todo.
+    {ok, Pid} = manager:spawn_worker(),
+    eqc_helpers:fixpoint([whereis(manager), Pid]),
+    manager:read_status(Pid).
 
 enqueue_no_tokens_command(_S) ->
     {call, ?MODULE, enqueue_no_tokens, []}.
@@ -153,6 +160,9 @@ enqueue_no_tokens_command(_S) ->
 enqueue_no_tokens_pre(#state { tokens = T }) -> T == 0.
 
 enqueue_no_tokens_next(S, _, _) -> S#state { queue_size = 1 }.
+
+enqueue_no_tokens_post(_S, [], queueing) -> true;
+enqueue_no_tokens_post(_S, [], Res) -> {error, {enqueue_no_tokens, Res}}.
 
 %%%% Case 6: Enqueueing when there is a token and no worker
 enqueue_to_work() ->
