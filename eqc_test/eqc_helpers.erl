@@ -10,7 +10,7 @@ fixpoint(Pids, State) ->
     Val = test(Pids),
     case Val == State of
         true ->
-            timer:sleep(3),
+            erlang:yield(),
             Val2 = test(Pids),
             case Val2 == State of
                 true ->
@@ -19,7 +19,7 @@ fixpoint(Pids, State) ->
                     fixpoint(Pids, Val2)
             end;
         false ->
-            timer:sleep(2),
+            erlang:yield(),
             fixpoint(Pids, Val)
     end.
 
