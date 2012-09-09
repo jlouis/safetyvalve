@@ -13,7 +13,9 @@
 %% API
 -export([start_link/0]).
 -export([spawn_worker/0,
+         current_pids/0,
          doing_work/0,
+         mark_done/0,
          status/1,
          read_status/1]).
 
@@ -47,6 +49,12 @@ status(Term) ->
 read_status(Pid) ->
     gen_server:call(?MODULE, {read_status, Pid}).
 
+mark_done() ->
+    gen_server:call(?MODULE, mark_done).
+
+current_pids() ->
+    gen_server:call(?MODULE, current_pids).
+
 %%%===================================================================
 
 %% @private
@@ -72,6 +80,17 @@ handle_call({status, S}, {Pid, _Tag}, #state { workers = Workers } = State) ->
 handle_call({read_status, Pid}, _From, State) ->
     Response = lists:keyfind(Pid, 1, State#state.workers),
     {reply, Response, State};
+handle_call(current_pids, _From, #state { workers = Workers } = State) ->
+    Pids = [P || {P, _} <- Workers],
+    {reply, Pids, State};
+handle_call(mark_done, _From, #state { workers = Workers } = State) ->
+    case [{Pid, From} || {Pid, {working, From}} <- Workers] of
+        [] ->
+            {reply, {error, none_working}, State};
+        [{Pid, From} | _T] ->
+            gen_server:reply(From, done),
+            {reply, {ok, Pid}, State}
+    end;
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.

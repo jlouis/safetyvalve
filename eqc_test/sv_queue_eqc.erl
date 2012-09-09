@@ -82,14 +82,13 @@ initial_state() ->
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
-
-%%%% Case 1: polling the queue, when the token bucket is full
-poll_full() ->
+poll() ->
     sv_queue:poll(?Q),
     sv_queue:q(?Q, tokens).
 
+%%%% Case 1: polling the queue, when the token bucket is full
 poll_full_command(_S) ->
-    {call, ?MODULE, poll_full, []}.
+    {call, ?MODULE, poll, []}.
 
 %% This case matches, when the token bucket is full
 poll_full_pre(#state { tokens = T }) -> T == 1.
@@ -100,12 +99,8 @@ poll_full_post(_S, [], 1) -> true;
 poll_full_post(_S, _, _) -> {error, wrong_token_count}.
 
 %%%% Case 2: polling the queue, when there is no-one queued
-poll_empty_q() ->
-    sv_queue:poll(?Q),
-    sv_queue:q(?Q, tokens).
-
 poll_empty_q_command(_S) ->
-    {call, ?MODULE, poll_empty_q, []}.
+    {call, ?MODULE, poll, []}.
 
 %% This case matches if we are lacking a token and the queue is empty
 poll_empty_q_pre(#state { tokens = T, queue_size = QS }) ->
@@ -117,11 +112,8 @@ poll_empty_q_post(_S, [], 1) -> true;
 poll_empty_q_post(_S, [], _) -> {error, poll_empty_q_post}.
 
 %%%% Case 3: polling the queue, when there is a waiter and no-one working
-poll_to_work() ->
-    todo.
-
 poll_to_work_command(_S) ->
-    {call, ?MODULE, poll_to_work, []}.
+    {call, ?MODULE, poll, []}.
 
 poll_to_work_pre(#state { tokens = T, queue_size = QS, concurrency = C }) ->
     T == 0 andalso QS == 1 andalso C == 0.
@@ -132,14 +124,18 @@ poll_to_work_next(S, _, _) ->
 %% ENQUEUEING
 %% ----------------------------------------------------------------------
 
-%%%% Case 4: Enqueueing on a full queue
-enqueue_full() ->
+%% The queueing command is generic. It does the same thing: spawn a
+%% new worker, wait until the system reaches a fixpoint and then read
+%% out the workers status.
+enqueue() ->
     {ok, Pid} = manager:spawn_worker(),
-    eqc_helpers:fixpoint([whereis(manager), Pid]),
+    eqc_helpers:fixpoint([whereis(manager), manager:current_pids()]),
     manager:read_status(Pid).
 
+%%%% Case 4: Enqueueing on a full queue
+
 enqueue_full_command(_S) ->
-    {call, ?MODULE, enqueue_full, []}.
+    {call, ?MODULE, enqueue, []}.
 
 enqueue_full_pre(#state { queue_size = QS }) -> QS == 1.
 
@@ -149,13 +145,8 @@ enqueue_full_post(_S, [], {error, queue_full}) -> true;
 enqueue_full_post(_S, [], _) -> {error, enqueue_full_post}.
 
 %%%% Case 5: Enqueuing when there is no available token
-enqueue_no_tokens() ->
-    {ok, Pid} = manager:spawn_worker(),
-    eqc_helpers:fixpoint([whereis(manager), Pid]),
-    manager:read_status(Pid).
-
 enqueue_no_tokens_command(_S) ->
-    {call, ?MODULE, enqueue_no_tokens, []}.
+    {call, ?MODULE, enqueue, []}.
 
 enqueue_no_tokens_pre(#state { tokens = T }) -> T == 0.
 
@@ -165,13 +156,8 @@ enqueue_no_tokens_post(_S, [], queueing) -> true;
 enqueue_no_tokens_post(_S, [], Res) -> {error, {enqueue_no_tokens, Res}}.
 
 %%%% Case 6: Enqueueing when there is a token and no worker
-enqueue_to_work() ->
-    {ok, Pid} = manager:spawn_worker(),
-    eqc_helpers:fixpoint([whereis(manager), Pid]),
-    manager:read_status(Pid).
-
 enqueue_to_work_command(_S) ->
-    {call, ?MODULE, enqueue_to_work, []}.
+    {call, ?MODULE, enqueue, []}.
 
 enqueue_to_work_pre(#state { tokens = 1, queue_size = 0, concurrency = 0 }) ->
     true;
@@ -184,46 +170,39 @@ enqueue_to_work_post(_S, [], {working, _}) -> true;
 enqueue_to_work_post(_S, [], Res) -> {error, {enqueue_to_work, Res}}.
 
 %%%% Case 7: Enqueueing when there is a worker    
-enqueue_to_wait() ->
-    {ok, Pid} = manager:spawn_worker(),
-    eqc_helpers:fixpoint([whereis(manager), Pid]),
-    manager:read_status(Pid).
-    
 enqueue_to_wait_command(_S) ->
-    {call, ?MODULE, enqueue_to_wait, []}.
+    {call, ?MODULE, enqueue, []}.
 
-enqueue_to_wait_pre(#state { tokens = 1, queue_size = 0, concurrency = 1 }) ->
-    true;
-enqueue_to_wait_pre(_) -> false.
+enqueue_to_wait_pre(#state { tokens = 1,
+                             queue_size = 0,
+                             concurrency = 1 }) -> true;
+enqueue_to_wait_pre(_)                          -> false.
 
-enqueue_to_wait_next(S, _, _) ->
-    S#state { queue_size = 1 }.
+enqueue_to_wait_next(S, _, _) -> S#state { queue_size = 1 }.
 
 enqueue_to_wait_post(_S, [], queueing) -> true;
-enqueue_to_wait_post(_S, [], Res) -> {error, {enqueue_to_work, Res}}.
+enqueue_to_wait_post(_S, [], Res)      -> {error, {enqueue_to_work, Res}}.
 
 %% MARKING WORK AS DONE
 %% ----------------------------------------------------------------------
 
+done() ->
+    {ok, Pid} = manager:mark_done(),
+    eqc_helper:fixpoint([whereis(manager), manager:current_pids()]),
+    manager:read_status(Pid).
+
 %%%% Case 8: Done no more work
-done_no_work() ->
-    todo.
-
 done_no_work_command(_S) ->
-    {call, ?MODULE, done_no_work, []}.
+    {call, ?MODULE, done, []}.
 
-done_no_work_pre(#state { concurrency = 1, queue_size = 0 }) ->
-    true;
+done_no_work_pre(#state { concurrency = 1, queue_size = 0 }) -> true;
 done_no_work_pre(_) -> false.
 
 done_no_work_next(S, _, _) -> S#state { concurrency = 0 }.
 
 %%%% Case 9: Done, no more tokens
-done_no_tokens() ->
-    todo.
-
 done_no_tokens_command(_S) ->
-    {call, ?MODULE, done_no_tokens, []}.
+    {call, ?MODULE, done, []}.
 
 done_no_tokens_pre(#state { concurrency = 1, queue_size = 1, tokens = 0 }) ->
     true;
@@ -232,11 +211,8 @@ done_no_tokens_pre(_) -> false.
 done_no_tokens_next(S, _, _) -> S#state { concurrency = 0 }.
 
 %%%% Case 10: Done, run next
-done_go_on() ->
-    todo.
-
 done_go_on_command(_S) ->
-    {call, ?MODULE, done_go_on, []}.
+    {call, ?MODULE, done, []}.
 
 done_go_on_pre(#state { concurrency = 1, queue_size = 1, tokens = 1 }) ->
     true;
