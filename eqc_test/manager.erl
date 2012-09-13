@@ -17,7 +17,9 @@
          doing_work/0,
          mark_done/0,
          status/1,
-         read_status/1]).
+         read_status/1,
+         stop/0
+        ]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -55,6 +57,9 @@ mark_done() ->
 current_pids() ->
     gen_server:call(?MODULE, current_pids).
 
+stop() ->
+    gen_server:call(?MODULE, stop).
+
 %%%===================================================================
 
 %% @private
@@ -63,8 +68,8 @@ init([]) ->
 
 %% @private
 handle_call(spawn_worker, _From, #state { workers = Workers } = State) ->
-    {ok, Pid} = worker:start_link(),
-    {reply, ok, State#state {workers = [{Pid, queueing} | Workers ] }};
+    Pid = worker:start_link(),
+    {reply, {ok, Pid}, State#state {workers = [{Pid, queueing} | Workers ] }};
 handle_call(doing_work, {Pid, _Tag} = From,
             #state { workers = Workers } = State) ->
     {noreply, State#state {
@@ -78,7 +83,7 @@ handle_call({status, S}, {Pid, _Tag}, #state { workers = Workers } = State) ->
        workers =
            lists:keyreplace(Pid, 1, Workers, {Pid, {res, S}}) }};
 handle_call({read_status, Pid}, _From, State) ->
-    Response = lists:keyfind(Pid, 1, State#state.workers),
+    {_Key, Response} = lists:keyfind(Pid, 1, State#state.workers),
     {reply, Response, State};
 handle_call(current_pids, _From, #state { workers = Workers } = State) ->
     Pids = [P || {P, _} <- Workers],
@@ -91,6 +96,8 @@ handle_call(mark_done, _From, #state { workers = Workers } = State) ->
             gen_server:reply(From, done),
             {reply, {ok, Pid}, State}
     end;
+handle_call(stop, _From, State) ->
+    {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
