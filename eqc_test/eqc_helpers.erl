@@ -24,17 +24,19 @@ fixpoint(Pids, State) ->
     end.
 
 test(Pids) ->
+    error_logger:info_report([{pids, Pids}]),
     [test_pid(P) || P <- Pids].
 
 test_pid(P) ->
-    {status, Status} = process_info(P, status),
-    {reductions, Reds} = process_info(P, reductions),
-    case Status of
-        waiting ->
-            {P, waiting, Reds};
-        _Other ->
-            {P, make_ref, Reds}
+    case process_info(P, status) of
+        undefined ->
+            {P, dead, 0};
+        {status, St} ->
+            {reductions, Reds} = process_info(P, reductions),
+            case St of
+                waiting ->
+                    {P, waiting, Reds};
+                _Other ->
+                    {P, make_ref, Reds}
+            end
     end.
-            
-        
-    
