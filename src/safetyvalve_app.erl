@@ -22,6 +22,6 @@ stop(_State) ->
 
 %% ----------------------------------------------------------------------
 start_queue({QName, Conf}) ->
-    lager:info("Safetyvalve starting up queue: ~p", QName),
+    lager:info("Safetyvalve starting up queue: ~p", [QName]),
     {ok, _Pid} = safetyvalve_sup:start_queue(QName, Conf),
     ok.
