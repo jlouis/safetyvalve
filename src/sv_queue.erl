@@ -104,12 +104,19 @@ init([Conf]) ->
 %% @private
 handle_call({q, tokens}, _, #state { tokens = K } = State) ->
     {reply, K, State};
-handle_call(ask, {Pid, _Tag}, #state { tokens = K,
+handle_call(ask, {Pid, _Tag} = From, #state { tokens = K,
+                                       conf = Conf,
+                                       queue = Q,
                                        tasks = Tasks } = State) when K > 0 ->
     %% Let the guy run, since we have excess tokens:
-    Ref = erlang:monitor(process, Pid),
-    {reply, {go, Ref}, State#state { tokens = K-1,
-                                     tasks  = gb_sets:add_element(Ref, Tasks) }};
+    case analyze_tasks(Tasks, Conf) of
+        queue_full ->
+            {noreply, State#state { queue = queue:in(From, Q )}};
+        go ->
+            Ref = erlang:monitor(process, Pid),
+            {reply, {go, Ref}, State#state { tokens = K-1,
+                                             tasks  = gb_sets:add_element(Ref, Tasks) }}
+    end;
 handle_call(ask, From, #state { tokens = 0,
                                 queue = Q } = State) ->
     %% No more tokens, queue the guy
@@ -161,6 +168,15 @@ process_queue(K, Q, TS) ->
             process_queue(K-1, Q2, gb_sets:add_element(Ref, TS));
         {empty, Q2} ->
             {K, Q2, TS}
+    end.
+
+%% @doc Analyze tasks to see if we are close to the limit
+analyze_tasks(Tasks, #conf { concurrency = Limit }) ->
+    case gb_sets:size(Tasks) of
+        K when K < Limit ->
+            go;
+        K when K == Limit ->
+            queue_full
     end.
 
 %% @doc Refill the tokens in the bucket
