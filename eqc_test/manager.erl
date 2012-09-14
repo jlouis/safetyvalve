@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start/0, start_link/0]).
 -export([spawn_worker/0,
          current_pids/0,
          doing_work/0,
@@ -32,6 +32,12 @@
          }).
 
 %%%===================================================================
+
+%% @doc
+%% Start the server, but do not link it
+%% @end
+start() ->
+    gen_server:start({local, ?SERVER}, ?MODULE, [], []).
 
 %% @doc
 %% Starts the server
