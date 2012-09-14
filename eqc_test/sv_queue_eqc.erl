@@ -75,17 +75,24 @@
 
 %% The intial queue state
 %% ----------------------------------------------------------------------
+gen_initial_state() ->
+    ?LET(MaxQueueSize, choose(1, 5),
+         #state { concurrency = 0,
+                  queue_size  = 0,
+                  max_queue_size = MaxQueueSize,
+                  tokens      = 1  }).
+
 initial_state() ->
     #state { concurrency = 0,
              queue_size  = 0,
-             tokens      = 1 }. %% Initialized to the rate of the queue
-
+             tokens      = 1  }. %% Initialized to the rate of the queue
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
 poll() ->
     C1 = sv_queue:q(?Q, tokens),
     sv_queue:poll(?Q),
+    timer:sleep(1),
     eqc_helpers:fixpoint([whereis(?Q)]),
     {C1, sv_queue:q(?Q, tokens)}.
 
@@ -141,6 +148,7 @@ poll_to_work_post(_S, [], Res)    -> {error, {poll_to_work, Res}}.
 %% out the workers status.
 enqueue() ->
     {ok, Pid} = manager:spawn_worker(),
+    timer:sleep(1),
     eqc_helpers:fixpoint([whereis(manager) , whereis(?Q) | manager:current_pids()]),
     {manager:read_status(Pid), sv_queue:q(?Q, tokens)}.
 
@@ -209,6 +217,7 @@ enqueue_to_wait_post(_S, [], Res)      -> {error, {enqueue_to_wait, Res}}.
 done() ->
     case manager:mark_done() of
         {ok, Pid} ->
+            timer:sleep(1),
             eqc_helpers:fixpoint([whereis(manager), whereis(?Q) | manager:current_pids()]),
             manager:read_status(Pid);
         {error, none_working} ->
@@ -276,22 +285,24 @@ weight(_S, done_go_on)        -> 1500.
 
 %% Check that the model can run
 prop_model() ->
-    ?FORALL(Cmds, commands(?MODULE),
-            ?TRAPEXIT(
-               begin
-                   {ok, _Pid} = manager:start(),
-                   application:start(safetyvalve),
-                   {History, State, Result} = run_commands(?MODULE, Cmds),
-                   application:stop(safetyvalve),
-                   ok = manager:stop(),
-                   ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
-                                       [History, State, Result]),
-                             aggregate(command_names(Cmds), Result =:= ok))
-               end)
+    ?FORALL(InitState, gen_initial_state(),
+            ?FORALL(Cmds, commands(?MODULE, InitState),
+                    ?TRAPEXIT(
+                       begin
+                           {ok, _Pid} = manager:start(),
+                           application:start(safetyvalve),
+                           {History, State, Result} = run_commands(?MODULE, Cmds),
+                           application:stop(safetyvalve),
+                           ok = manager:stop(),
+                           ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
+                                               [History, State, Result]),
+                                     aggregate(command_names(Cmds), Result =:= ok))
+                       end)
+                   )
            ).
 
 t() ->
     application:start(syntax_tools),
     application:start(compiler),
     application:start(lager),
-    eqc:module({numtests, 1000}, ?MODULE).
+    eqc:module({numtests, 10}, ?MODULE).
