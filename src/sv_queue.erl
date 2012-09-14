@@ -110,17 +110,28 @@ handle_call(ask, {Pid, _Tag} = From, #state { tokens = K,
                                        tasks = Tasks } = State) when K > 0 ->
     %% Let the guy run, since we have excess tokens:
     case analyze_tasks(Tasks, Conf) of
-        queue_full ->
-            {noreply, State#state { queue = queue:in(From, Q )}};
+        concurrency_full ->
+            case enqueue(From, Q, Conf) of
+                {ok, NQ} ->
+                    {noreply, State#state { queue = NQ}};
+                queue_full ->
+                    {reply, {error, queue_full}, State}
+            end;
         go ->
             Ref = erlang:monitor(process, Pid),
             {reply, {go, Ref}, State#state { tokens = K-1,
                                              tasks  = gb_sets:add_element(Ref, Tasks) }}
     end;
 handle_call(ask, From, #state { tokens = 0,
+                                conf = Conf,
                                 queue = Q } = State) ->
     %% No more tokens, queue the guy
-    {noreply, State#state { queue = queue:in(From, Q) }};
+    case enqueue(From, Q, Conf) of
+        {ok, NQ} ->
+            {noreply, State#state { queue = NQ } };
+        queue_full ->
+            {reply, {error, queue_full}, State}
+    end;
 handle_call({done, Ref}, _From, #state { tasks = Tasks } = State) ->
     true = erlang:demonitor(Ref),
     {reply, ok, State#state { tasks = gb_sets:del_element(Ref, Tasks)}};
@@ -170,13 +181,21 @@ process_queue(K, Q, TS) ->
             {K, Q2, TS}
     end.
 
+enqueue(Term, Q, #conf { size = Sz } ) ->
+    case queue:len(Q) of
+        K when K < Sz ->
+            {ok, queue:in(Term, Q)};
+        K when K == Sz ->
+            queue_full
+    end.
+
 %% @doc Analyze tasks to see if we are close to the limit
 analyze_tasks(Tasks, #conf { concurrency = Limit }) ->
     case gb_sets:size(Tasks) of
         K when K < Limit ->
             go;
         K when K == Limit ->
-            queue_full
+            concurrency_full
     end.
 
 %% @doc Refill the tokens in the bucket
