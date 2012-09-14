@@ -265,7 +265,6 @@ prop_model() ->
                    {History, State, Result} = run_commands(?MODULE, Cmds),
                    application:stop(safetyvalve),
                    ok = manager:stop(),
-                   timer:sleep(1000),
                    ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
                                        [History, State, Result]),
                              aggregate(command_names(Cmds), Result =:= ok))
