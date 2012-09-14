@@ -83,11 +83,8 @@ handle_call(doing_work, {Pid, _Tag} = From,
                     lists:keyreplace(Pid, 1, Workers, {Pid, {working, From}})
                }};
 handle_call({status, S}, {Pid, _Tag}, #state { workers = Workers } = State) ->
-    {reply,
-     ok,
-     State#state {
-       workers =
-           lists:keyreplace(Pid, 1, Workers, {Pid, {res, S}}) }};
+    {reply, ok, State#state {
+                  workers = lists:keyreplace(Pid, 1, Workers, {Pid, {res, S}}) }};
 handle_call({read_status, Pid}, _From, State) ->
     {_Key, Response} = lists:keyfind(Pid, 1, State#state.workers),
     {reply, Response, State};

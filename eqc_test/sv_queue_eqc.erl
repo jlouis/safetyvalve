@@ -148,8 +148,8 @@ enqueue_full_pre(#state { queue_size = QS }) -> QS == 1.
 
 enqueue_full_next(S, _, _) -> S.
 
-enqueue_full_post(_S, [], {error, queue_full}) -> true;
-enqueue_full_post(_S, [], _) -> {error, enqueue_full_post}.
+enqueue_full_post(_S, [], {res, {error, queue_full}}) -> true;
+enqueue_full_post(_S, [], Res) -> {error, enqueue_full_post, Res}.
 
 %%%% Case 5: Enqueuing when there is no available token
 enqueue_no_tokens() -> enqueue().
