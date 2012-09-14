@@ -68,7 +68,7 @@ init([]) ->
 
 %% @private
 handle_call(spawn_worker, _From, #state { workers = Workers } = State) ->
-    Pid = worker:start_link(),
+    Pid = worker:start(),
     {reply, {ok, Pid}, State#state {workers = [{Pid, queueing} | Workers ] }};
 handle_call(doing_work, {Pid, _Tag} = From,
             #state { workers = Workers } = State) ->
