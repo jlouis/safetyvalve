@@ -134,7 +134,8 @@ handle_call(ask, From, #state { tokens = 0,
     end;
 handle_call({done, Ref}, _From, #state { tasks = Tasks } = State) ->
     true = erlang:demonitor(Ref),
-    {reply, ok, State#state { tasks = gb_sets:del_element(Ref, Tasks)}};
+    NewState = State#state { tasks = gb_sets:del_element(Ref, Tasks) },
+    {reply, ok, process_queue(NewState) };
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
