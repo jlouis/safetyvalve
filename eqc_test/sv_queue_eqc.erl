@@ -83,9 +83,10 @@ initial_state() ->
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
 poll() ->
+    C1 = sv_queue:q(?Q, tokens),
     sv_queue:poll(?Q),
     eqc_helpers:fixpoint([whereis(?Q)]),
-    sv_queue:q(?Q, tokens).
+    {C1, sv_queue:q(?Q, tokens)}.
 
 poll_full() -> poll().
 
@@ -98,8 +99,8 @@ poll_full_pre(#state { tokens = T }) -> T == 1.
 
 poll_full_next(S, _, _) -> S.
 
-poll_full_post(_S, [], 1) -> true;
-poll_full_post(_S, _, _) -> {error, wrong_token_count}.
+poll_full_post(_S, [], {1, 1}) -> true;
+poll_full_post(_S, _, Res) -> {error, {wrong_token_count, Res}}.
 
 %%%% Case 2: polling the queue, when there is no-one queued
 poll_empty_q() -> poll().
@@ -113,7 +114,7 @@ poll_empty_q_pre(#state { tokens = T, queue_size = QS }) ->
 
 poll_empty_q_next(S, _, _) -> S#state { tokens = 1 }.
 
-poll_empty_q_post(_S, [], 1) -> true;
+poll_empty_q_post(_S, [], {0, 1}) -> true;
 poll_empty_q_post(_S, [], _) -> {error, poll_empty_q_post}.
 
 %%%% Case 3: polling the queue, when there is a waiter and no-one working
@@ -128,6 +129,9 @@ poll_to_work_pre(#state { tokens = T, queue_size = QS, concurrency = C }) ->
 poll_to_work_next(S, _, _) ->
     S#state { concurrency = 1, queue_size = 0, tokens = 0 }.
 
+poll_to_work_post(_S, [], {0, 0}) -> true;
+poll_to_work_post(_S, [], Res)    -> {error, {poll_to_work, Res}}.
+
 %% ENQUEUEING
 %% ----------------------------------------------------------------------
 
@@ -137,7 +141,7 @@ poll_to_work_next(S, _, _) ->
 enqueue() ->
     {ok, Pid} = manager:spawn_worker(),
     eqc_helpers:fixpoint([whereis(manager) , whereis(?Q) | manager:current_pids()]),
-    manager:read_status(Pid).
+    {manager:read_status(Pid), sv_queue:q(?Q, tokens)}.
 
 %%%% Case 4: Enqueueing on a full queue
 enqueue_full() -> enqueue().
@@ -149,7 +153,7 @@ enqueue_full_pre(#state { queue_size = QS }) -> QS == 1.
 
 enqueue_full_next(S, _, _) -> S.
 
-enqueue_full_post(_S, [], {res, {error, queue_full}}) -> true;
+enqueue_full_post(_S, [], {{res, {error, queue_full}}, _}) -> true;
 enqueue_full_post(_S, [], Res) -> {error, enqueue_full_post, Res}.
 
 %%%% Case 5: Enqueuing when there is no available token
@@ -164,7 +168,7 @@ enqueue_no_tokens_pre(#state { tokens = T,
 
 enqueue_no_tokens_next(S, _, _) -> S#state { queue_size = 1 }.
 
-enqueue_no_tokens_post(_S, [], queueing) -> true;
+enqueue_no_tokens_post(_S, [], {queueing, 0}) -> true;
 enqueue_no_tokens_post(_S, [], Res) -> {error, {enqueue_no_tokens, Res}}.
 
 %%%% Case 6: Enqueueing when there is a token and no worker
@@ -180,7 +184,7 @@ enqueue_to_work_pre(_) -> false.
 enqueue_to_work_next(S, _, _) ->
     S#state { tokens = 0, queue_size = 0, concurrency = 1 }.
 
-enqueue_to_work_post(_S, [], {working, _}) -> true;
+enqueue_to_work_post(_S, [], {{working, _}, 0}) -> true;
 enqueue_to_work_post(_S, [], Res) -> {error, {enqueue_to_work, Res}}.
 
 %%%% Case 7: Enqueueing when there is a worker    
@@ -196,7 +200,7 @@ enqueue_to_wait_pre(_)                          -> false.
 
 enqueue_to_wait_next(S, _, _) -> S#state { queue_size = 1 }.
 
-enqueue_to_wait_post(_S, [], queueing) -> true;
+enqueue_to_wait_post(_S, [], {queueing, 1}) -> true;
 enqueue_to_wait_post(_S, [], Res)      -> {error, {enqueue_to_wait, Res}}.
 
 %% MARKING WORK AS DONE
