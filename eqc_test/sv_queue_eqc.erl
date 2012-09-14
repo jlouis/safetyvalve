@@ -260,7 +260,7 @@ prop_model() ->
     ?FORALL(Cmds, commands(?MODULE),
             ?TRAPEXIT(
                begin
-                   {ok, _Pid} = manager:start_link(),
+                   {ok, _Pid} = manager:start(),
                    application:start(safetyvalve),
                    {History, State, Result} = run_commands(?MODULE, Cmds),
                    application:stop(safetyvalve),
