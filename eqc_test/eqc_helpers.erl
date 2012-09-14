@@ -4,7 +4,6 @@
 
 
 fixpoint(Pids) ->
-    timer:sleep(1), % Bad thing, but for now we set it.
     fixpoint(Pids, test(Pids)).
 
 fixpoint(Pids, State) ->
