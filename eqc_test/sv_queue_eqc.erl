@@ -38,35 +38,36 @@
 %% {x, 0, 0} -> poll -> {x, 0, 1}
 
 %% 3. poll, queue ready
-%% {0, 1, 0} -> poll-> {1, 0, 0}
+%% {0, K, 0} when K > 0 -> poll-> {1, K-1, 0}
 
 %% 4. Full queue cases
-%% {x, 1, y} -> queue -> {x, 1, y} (denied)
-%% {0, 1, 1} -> *impossible* - should immediately go to {1, 0, 0}
+%% {x, K, y} when K == MaxQ -> queue -> {x, K, y} (denied)
+%% {0, K, 1} when K > 0 -> *impossible* - should immediately go to {1, 0, 0}
 
 %% 5. Queue, no tokens
-%% {1, 0, 0} -> queue -> {1, 1, 0}
-%% {0, 0, 0} -> queue -> {0, 1, 0}
+%% {1, K, 0} when K < MaxQ -> queue -> {1, K+1, 0}
+%% {0, K, 0} when K < MaxQ -> queue -> {0, K+1, 0}
 
 %% 6. Queue, to work
 %% {0, 0, 1} -> queue -> {1, 0, 0}
 
 %% 7. Queue, wait for worker
-%% {1, 0, 1} -> queue -> {1, 1, 1}
+%% {1, K, 1} when K < MaxQ -> queue -> {1, K+1, 1}
 
 %% 8. Done - no more work
 %% {1, 0, x} -> done -> {0, 0, x}
 
 %% 9. Done - no more tokens
-%% {1, 1, 0} -> done -> {0, 1, 0}
+%% {1, K, 0} -> done -> {0, K, 0}
 
 %% 10. Done - with tokens
-%% {1, 1, 1} -> done -> {1, 0, 0}
+%% {1, K, 1} -> done -> {1, K-1, 0}
 
 %% All in all, there are 10 possible transition commands available to
 %% us when we are testing this. 
 -record(state,
         { concurrency,
+          max_queue_size,
           queue_size,
           tokens }).
 
