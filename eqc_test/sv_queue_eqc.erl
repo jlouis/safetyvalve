@@ -84,6 +84,7 @@ initial_state() ->
 %% ----------------------------------------------------------------------
 poll() ->
     sv_queue:poll(?Q),
+    eqc_helpers:fixpoint([whereis(?Q)]),
     sv_queue:q(?Q, tokens).
 
 poll_full() -> poll().
@@ -135,7 +136,7 @@ poll_to_work_next(S, _, _) ->
 %% out the workers status.
 enqueue() ->
     {ok, Pid} = manager:spawn_worker(),
-    eqc_helpers:fixpoint([whereis(manager) | manager:current_pids()]),
+    eqc_helpers:fixpoint([whereis(manager) , whereis(?Q) | manager:current_pids()]),
     manager:read_status(Pid).
 
 %%%% Case 4: Enqueueing on a full queue
@@ -201,9 +202,14 @@ enqueue_to_wait_post(_S, [], Res)      -> {error, {enqueue_to_wait, Res}}.
 %% MARKING WORK AS DONE
 %% ----------------------------------------------------------------------
 done() ->
-    {ok, Pid} = manager:mark_done(),
-    eqc_helpers:fixpoint([whereis(manager) | manager:current_pids()]),
-    manager:read_status(Pid).
+    case manager:mark_done() of
+        {ok, Pid} ->
+            eqc_helpers:fixpoint([whereis(manager), whereis(?Q) | manager:current_pids()]),
+            manager:read_status(Pid);
+        {error, none_working} ->
+            error_logger:info_report([process_info(whereis(manager))]),
+            {error, none_working}
+    end.
 
 %%%% Case 8: Done no more work
 done_no_work() -> done().
@@ -216,6 +222,9 @@ done_no_work_pre(_) -> false.
 
 done_no_work_next(S, _, _) -> S#state { concurrency = 0 }.
 
+done_no_work_post(_S, [], {res, done}) -> true;
+done_no_work_post(_S, [], Res) -> {error, {done_no_work, Res}}.
+
 %%%% Case 9: Done, no more tokens
 done_no_tokens() -> done().
 
@@ -227,6 +236,9 @@ done_no_tokens_pre(#state { concurrency = 1, queue_size = 1, tokens = 0 }) ->
 done_no_tokens_pre(_) -> false.
 
 done_no_tokens_next(S, _, _) -> S#state { concurrency = 0 }.
+
+done_no_tokens_post(_S, [], {res, done}) -> true;
+done_no_tokens_post(_S, [], Res) -> {error, {done_no_tokens, Res}}.
 
 %%%% Case 10: Done, run next
 done_go_on() -> done().
