@@ -27,16 +27,29 @@ test(Pids) ->
     error_logger:info_report([{pids, Pids}]),
     [test_pid(P) || P <- Pids].
 
-test_pid(P) ->
-    case process_info(P, status) of
+test_pid(Pid) ->
+    case test_status(test_reductions(Pid)) of
+        {Pid, State, Reds} ->
+            {Pid, State, Reds};
         undefined ->
-            {P, dead, 0};
-        {status, St} ->
-            {reductions, Reds} = process_info(P, reductions),
-            case St of
-                waiting ->
-                    {P, waiting, Reds};
-                _Other ->
-                    {P, make_ref, Reds}
-            end
+            {Pid, undefined, undefined}
+    end.
+
+test_reductions(Pid) ->
+    case process_info(Pid, reductions) of
+        {reductions, Reds} ->
+            {Pid, Reds};
+        undefined ->
+            {Pid, undefined}
+    end.
+
+test_status({_, undefined}) -> undefined;
+test_status({Pid, Reds}) ->
+    case process_info(Pid, status) of
+        undefined ->
+            undefined;
+        {status, waiting} ->
+            {Pid, waiting, Reds};
+        _Other ->
+            {Pid, make_ref, Reds}
     end.
