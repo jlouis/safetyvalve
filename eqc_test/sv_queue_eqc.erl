@@ -157,7 +157,9 @@ enqueue_no_tokens() -> enqueue().
 enqueue_no_tokens_command(_S) ->
     {call, ?MODULE, enqueue_no_tokens, []}.
 
-enqueue_no_tokens_pre(#state { tokens = T }) -> T == 0.
+enqueue_no_tokens_pre(#state { tokens = T,
+                               queue_size = Qs }) ->
+    T == 0 andalso Qs == 0.
 
 enqueue_no_tokens_next(S, _, _) -> S#state { queue_size = 1 }.
 
