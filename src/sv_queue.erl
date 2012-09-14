@@ -117,7 +117,7 @@ handle_call(ask, {Pid, _Tag} = From, #state { tokens = K,
                 queue_full ->
                     {reply, {error, queue_full}, State}
             end;
-        go ->
+        {go, _K} ->
             Ref = erlang:monitor(process, Pid),
             {reply, {go, Ref}, State#state { tokens = K-1,
                                              tasks  = gb_sets:add_element(Ref, Tasks) }}
@@ -148,9 +148,9 @@ handle_cast(_Msg, State) ->
 handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
     {noreply, State#state { tasks = gb_sets:del_element(Ref, TS) }};
 handle_info(poll, #state { conf = C } = State) ->
-    lager:debug("Poll invoked"),
     NewState = process_queue(refill_tokens(State)),
     repoll(C),
+    lager:debug("Tokens: ~p", [NewState#state.tokens]),
     {noreply, NewState};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -167,19 +167,29 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% @doc Try to use up tokens for queued items
 %% @end
-process_queue(#state { queue = Q, tokens = K, tasks = Ts } = State) ->
-    {NK, NQ, NTs} = process_queue(K, Q, Ts),
-    State#state { queue = NQ, tokens = NK, tasks = NTs }.
+process_queue(#state { queue = Q, tokens = K, tasks = Ts, conf = Conf } = State) ->
+    case analyze_tasks(Ts, Conf) of
+        concurrency_full ->
+            State;
+        {go, RemainingConc} ->
+            ToStart = min(RemainingConc, K),
+            {Started, NQ, NTs} = process_queue(ToStart, Q, Ts),
+            State#state { queue = NQ, tokens = K - Started, tasks = NTs }
+    end.
 
-process_queue(0, Q, TS) -> {0, Q, TS};
-process_queue(K, Q, TS) ->
+process_queue(Rem, Q, TS) ->
+    process_queue(Rem, Q, TS, 0).
+
+process_queue(0, Q, TS, Started) ->
+    {Started, Q, TS};
+process_queue(K, Q, TS, Started) ->
     case queue:out(Q) of
         {{value, {Pid, _} = From}, Q2} ->
             Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
-            process_queue(K-1, Q2, gb_sets:add_element(Ref, TS));
+            process_queue(K-1, Q2, gb_sets:add_element(Ref, TS), Started+1);
         {empty, Q2} ->
-            {K, Q2, TS}
+            {Started, Q2, TS}
     end.
 
 enqueue(Term, Q, #conf { size = Sz } ) ->
@@ -194,7 +204,7 @@ enqueue(Term, Q, #conf { size = Sz } ) ->
 analyze_tasks(Tasks, #conf { concurrency = Limit }) ->
     case gb_sets:size(Tasks) of
         K when K < Limit ->
-            go;
+            {go, Limit - K};
         K when K == Limit ->
             concurrency_full
     end.
@@ -203,8 +213,12 @@ analyze_tasks(Tasks, #conf { concurrency = Limit }) ->
 %% @end
 refill_tokens(#state { tokens = K,
                        conf = #conf { rate = Rate,
-                                      token_limit = TL }} = State) ->
+                                      token_limit = TL }} = State) when K >= 0 ->
     TokenCount = min(K + Rate, TL),
+    error_logger:info_report([{k, K},
+                              {rate, Rate},
+                              {tl, TL},
+                              {token_count, TokenCount}]),
     State#state { tokens = TokenCount }.
 
 repoll(#conf { hz = undefined }) -> ok;
