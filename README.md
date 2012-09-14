@@ -18,7 +18,21 @@ should be designed around the idea that it can be tested more.
 
 # Status
 
-Safety Valve is still under development
+Safety Valve is still under development. The current state is that we
+have a quickcheck model for the following configuration (it is
+described below what this configuration means):
+
+```
+QDef = {my_queue, [{hz, undefined},
+                   {rate, 1},
+                   {token_limit, 1},
+                   {size, 1},
+                   {concurrency, 1}]}
+```
+
+For this configuration we have passed the QuickCheck model. While this
+does not prove the system correct, it does argue most of the system
+has been tested.
 
 # Configuration
 
@@ -45,7 +59,10 @@ The configuration will tell the queue to poll once every 1000ms via
 the `hz` value. Setting this value lower makes the queue reconsider
 its tokens more often, with a less jagged performance as a result.
 Setting this value too low may however make your Erlang VM spend a
-high amount of time in a poller loop, doing essentially nothing.
+high amount of time in a poller loop, doing essentially nothing. It is
+also possible to specify `undefined` in which case it will never poll.
+You have to call `sv_queue:poll(QName)` to manually poll. This is very
+useful for testing!
 
 The `rate` is the number of tokens to add per poll.
 
