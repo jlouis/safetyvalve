@@ -63,7 +63,7 @@ gen_initial_state() ->
     #state { concurrency = 0,
              queue_size  = 0,
              tokens      = 1,
-             max_queue_size = 1
+             max_queue_size = choose(1,5)
            }.
 
 %% POLLING OF THE QUEUE
@@ -135,7 +135,7 @@ enqueue_post(#state { concurrency = C, queue_size = QS, tokens = T,
         {_, K, 0, {queueing, 0}} when K < MaxQ -> true;
         {0, 0, 1, {{working, _}, 0}} -> true;
         {1, K, 1, {queueing, 1}} when K < MaxQ -> true;
-        _ -> {error, {enqueue_to_wait, R}}
+        _ -> {error, {enqueue, R}}
     end.
 
 %% MARKING WORK AS DONE
@@ -149,7 +149,7 @@ done() ->
         {ok, Pid} ->
             timer:sleep(1),
             eqc_helpers:fixpoint([whereis(manager), whereis(?Q) | manager:current_pids()]),
-            manager:read_status(Pid);
+            {manager:read_status(Pid), sv_queue:q(?Q, tokens)};
         {error, none_working} ->
             error_logger:info_report([process_info(whereis(manager))]),
             {error, none_working}
@@ -162,27 +162,35 @@ done_pre(#state { concurrency = 1 }) -> true;
 done_pre(_) -> false.
 
 
-done_next(#state { concurrency = 1, queue_size = 1, tokens = 0 } = S, _, _) -> S#state { concurrency = 0 };
-done_next(#state { concurrency = 1, queue_size = 1, tokens = 1 } = S, _, _) -> S#state { queue_size = 0, tokens = 0 };
-done_next(#state { concurrency = 1, queue_size = 0 } = S, _, _) -> S#state { concurrency = 0 }.
+done_next(#state { concurrency = C, queue_size = QS, tokens = T } = S, _, _) ->
+    case {C, QS, T} of
+        {1, 0, _} -> S#state { concurrency = 0 };
+        {1, K, 0} when K > 0 -> S#state { concurrency = 0 };
+        {1, K, 1} when K > 0 -> S#state { queue_size = 0, tokens = 0 }
+    end.
 
 done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
     case {C, QS, T, Res} of
-        {1, 0, _, {res, done}} -> true;
-        {1, 1, 0, {res, done}} -> true;
-        {1, 1, 1, {res, done}} -> true;
+        {1, 0, _, {{res, done}, T}} -> true;
+        {1, K, 0, {{res, done}, 0}} when K > 0 -> true;
+        {1, K, 1, {{res, done}, 0}} when K > 0 -> true;
         R -> {error, {done, R}}
     end.
 
 %% WEIGHTS
 %% ----------------------------------------------------------------------
-weight(#state { tokens = 1 }, poll) -> 100;
-weight(#state { tokens = 0, queue_size = 0 }, poll) -> 100;
-weight(#state { tokens = 0, queue_size = 1, concurrency = 0}, poll) -> 150;
-weight(_S, poll) -> 100;
+
+%% TODO: Write this in the other style
+weight(#state { concurrency = C, queue_size = QS, tokens = T }, poll) ->
+    case {C, QS, T} of
+        {_, _, 1} -> 100;
+        {_, 0, 0} -> 100;
+        {0, K, 0} when K > 0 -> 150;
+        _         -> 100
+    end;
 weight(#state { concurrency = C, queue_size = QS, tokens = T }, enqueue) ->
     case {C, QS, T} of
-        {_, 1, _} -> 100;
+        {_, K, _} when K > 0 -> 100;
         {_, 0, 0} -> 80;
         {0, 0, 1} -> 100;
         {1, 0, 1} -> 800
@@ -190,12 +198,21 @@ weight(#state { concurrency = C, queue_size = QS, tokens = T }, enqueue) ->
 weight(#state { concurrency = C, queue_size = QS, tokens = T }, done) ->
     case {C, QS, T} of
         {1, 0, _} -> 100;
-        {1, 1, 0} -> 800;
-        {1, 1, 1} -> 1500
+        {1, K, 0} when K > 0 -> 800;
+        {1, K, 1} when K > 0 -> 1500
     end.
 
 %% PROPERTIES
 %% ----------------------------------------------------------------------
+
+set_queue(#state { max_queue_size = MaxQ }) ->
+    ok = application:set_env(safetyvalve, queues,
+                             [{test_queue_1, [{hz, undefined},
+                                              {rate, 1},
+                                              {token_limit, 1},
+                                              {size, MaxQ},
+                                              {concurrency, 1}
+                                             ]}]).
 
 %% Check that the model can run
 prop_model() ->
@@ -203,6 +220,7 @@ prop_model() ->
             ?FORALL(Cmds, commands(?MODULE, InitState),
                     ?TRAPEXIT(
                        begin
+                           set_queue(InitState),
                            {ok, _Pid} = manager:start(),
                            application:start(safetyvalve),
                            {History, State, Result} = run_commands(?MODULE, Cmds),
@@ -219,4 +237,5 @@ t() ->
     application:start(syntax_tools),
     application:start(compiler),
     application:start(lager),
+    application:load(safetyvalve),
     eqc:module({numtests, 300}, ?MODULE).
