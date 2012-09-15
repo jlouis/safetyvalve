@@ -27,7 +27,7 @@
 -include_lib("eqc/include/eqc_statem.hrl").
 -eqc_group_commands(true).
 
-%% The record state are 0/1 values on concurrency, queue size and
+%% The record state are 0/1 or 0/K values on concurrency, queue size and
 %% tokens. These mandate when you can expect a certain command to be possible
 %% and also captures the possible transition states on the queue:
 
@@ -76,69 +76,44 @@
 %% The intial queue state
 %% ----------------------------------------------------------------------
 gen_initial_state() ->
-    ?LET(MaxQueueSize, choose(1, 5),
-         #state { concurrency = 0,
-                  queue_size  = 0,
-                  max_queue_size = MaxQueueSize,
-                  tokens      = 1  }).
-
-initial_state() ->
     #state { concurrency = 0,
              queue_size  = 0,
-             tokens      = 1  }. %% Initialized to the rate of the queue
+             tokens      = 1,
+             max_queue_size = choose(1, 5)
+           }.
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
 poll() ->
-    C1 = sv_queue:q(?Q, tokens),
     sv_queue:poll(?Q),
     timer:sleep(1),
     eqc_helpers:fixpoint([whereis(?Q)]),
-    {C1, sv_queue:q(?Q, tokens)}.
-
-poll_full() -> poll().
+    sv_queue:q(?Q, tokens).
 
 %%%% Case 1: polling the queue, when the token bucket is full
-poll_full_command(_S) ->
-    {call, ?MODULE, poll_full, []}.
-
-%% This case matches, when the token bucket is full
-poll_full_pre(#state { tokens = T }) -> T == 1.
-
-poll_full_next(S, _, _) -> S.
-
-poll_full_post(_S, [], {1, 1}) -> true;
-poll_full_post(_S, _, Res) -> {error, {wrong_token_count, Res}}.
-
 %%%% Case 2: polling the queue, when there is no-one queued
-poll_empty_q() -> poll().
-
-poll_empty_q_command(_S) ->
-    {call, ?MODULE, poll_empty_q, []}.
-
-%% This case matches if we are lacking a token and the queue is empty
-poll_empty_q_pre(#state { tokens = T, queue_size = QS }) ->
-    T == 0 andalso QS == 0.
-
-poll_empty_q_next(S, _, _) -> S#state { tokens = 1 }.
-
-poll_empty_q_post(_S, [], {0, 1}) -> true;
-poll_empty_q_post(_S, [], _) -> {error, poll_empty_q_post}.
-
 %%%% Case 3: polling the queue, when there is a waiter and no-one working
-poll_to_work() -> poll().
+poll_command(_S) ->
+    {call, ?MODULE, poll, []}.
 
-poll_to_work_command(_S) ->
-    {call, ?MODULE, poll_to_work, []}.
+poll_next(#state { concurrency = C, queue_size = QS, tokens = T } = S, _, _) ->
+    case {C, QS, T} of
+        {_, _, 1} -> S;
+        {1, 1, 0} -> S#state { tokens = 1 };
+        {_, 0, 0} -> S#state { tokens = 1 };
+        {0, 1, 0} -> S#state { concurrency = 1,
+                               queue_size = 0,
+                               tokens = 0 }
+    end.
 
-poll_to_work_pre(#state { tokens = T, queue_size = QS, concurrency = C }) ->
-    T == 0 andalso QS == 1 andalso C == 0.
-
-poll_to_work_next(S, _, _) ->
-    S#state { concurrency = 1, queue_size = 0, tokens = 0 }.
-
-poll_to_work_post(_S, [], {0, 0}) -> true;
-poll_to_work_post(_S, [], Res)    -> {error, {poll_to_work, Res}}.
+poll_post(#state { concurrency = C, queue_size = QS, tokens = T}, _, Res) ->
+    case {C, QS, T, Res} of
+        {_, _, 1, 1} -> true;
+        {1, 1, 0, 1} -> true;
+        {_, 0, 0, 1} -> true;
+        {0, 1, 0, 0} -> true;
+        _ -> {error, {poll, Res}}
+    end.
 
 %% ENQUEUEING
 %% ----------------------------------------------------------------------
@@ -269,15 +244,16 @@ done_go_on_next(S, _, _) ->
 
 %% WEIGHTS
 %% ----------------------------------------------------------------------
+weight(#state { tokens = 1 }, poll) -> 100;
+weight(#state { tokens = 0, queue_size = 0 }, poll) -> 100;
+weight(#state { tokens = 0, queue_size = 1, concurrency = 0}, poll) -> 150;
+weight(_s, poll) -> 100;
 weight(_S, enqueue_no_tokens) -> 80;
 weight(_S, enqueue_full)      -> 100;
-weight(_S, poll_full)         -> 100;
 weight(_S, enqueue_to_work)   -> 100;
-weight(_S, poll_empty_q)      -> 100;
-weight(_S, done_no_work)      -> 100;
-weight(_S, poll_to_work)      -> 150;
-weight(_S, done_no_tokens)    -> 800;
 weight(_S, enqueue_to_wait)   -> 800;
+weight(_S, done_no_work)      -> 100;
+weight(_S, done_no_tokens)    -> 800;
 weight(_S, done_go_on)        -> 1500.
 
 %% PROPERTIES
@@ -305,4 +281,4 @@ t() ->
     application:start(syntax_tools),
     application:start(compiler),
     application:start(lager),
-    eqc:module({numtests, 10}, ?MODULE).
+    eqc:module({numtests, 300}, ?MODULE).
