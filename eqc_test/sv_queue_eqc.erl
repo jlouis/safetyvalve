@@ -31,40 +31,23 @@
 %% tokens. These mandate when you can expect a certain command to be possible
 %% and also captures the possible transition states on the queue:
 
-%% 1. Poll when full
-%% {x, y, 1} -> poll -> {x, y, 1}
-
-%% 2. poll, no queue ready
-%% {x, 0, 0} -> poll -> {x, 0, 1}
-
-%% 3. poll, queue ready
-%% {0, K, 0} when K > 0 -> poll-> {1, K-1, 0}
-
-%% 4. Full queue cases
-%% {x, K, y} when K == MaxQ -> queue -> {x, K, y} (denied)
-%% {0, K, 1} when K > 0 -> *impossible* - should immediately go to {1, 0, 0}
-
-%% 5. Queue, no tokens
-%% {1, K, 0} when K < MaxQ -> queue -> {1, K+1, 0}
-%% {0, K, 0} when K < MaxQ -> queue -> {0, K+1, 0}
-
-%% 6. Queue, to work
-%% {0, 0, 1} -> queue -> {1, 0, 0}
-
-%% 7. Queue, wait for worker
-%% {1, K, 1} when K < MaxQ -> queue -> {1, K+1, 1}
-
-%% 8. Done - no more work
-%% {1, 0, x} -> done -> {0, 0, x}
-
-%% 9. Done - no more tokens
-%% {1, K, 0} -> done -> {0, K, 0}
-
-%% 10. Done - with tokens
-%% {1, K, 1} -> done -> {1, K-1, 0}
+%% 1. Poll when full         : {x, y, 1} -> poll -> {x, y, 1}
+%% 2. poll, no queue ready   : {x, 0, 0} -> poll -> {x, 0, 1}
+%% 3. poll, queue ready      : {0, K, 0} when K > 0 -> poll-> {1, K-1, 0}
+%% 4. Full queue cases       : {x, K, y} when K == MaxQ -> queue -> {x, K, y} (denied)
+%%                           : {0, K, 1} when K > 0 -> *impossible* - should immediately go to {1, 0, 0}
+%% 5. Queue, no tokens       : {1, K, 0} when K < MaxQ -> queue -> {1, K+1, 0}
+%%                           : {0, K, 0} when K < MaxQ -> queue -> {0, K+1, 0}
+%% 6. Queue, to work         : {0, 0, 1} -> queue -> {1, 0, 0}
+%% 7. Queue, wait for worker : {1, K, 1} when K < MaxQ -> queue -> {1, K+1, 1}
+%% 8. Done - no more work    : {1, 0, x} -> done -> {0, 0, x}
+%% 9. Done - no more tokens  : {1, K, 0} -> done -> {0, K, 0}
+%% 10. Done - with tokens    : {1, K, 1} -> done -> {1, K-1, 0}
 
 %% All in all, there are 10 possible transition commands available to
-%% us when we are testing this. 
+%% us when we are testing this. These can be coalesced by considering
+%% each of the three possible commands you can execute: poll, queue
+%% and done.
 -record(state,
         { concurrency,
           queue_size,
@@ -155,6 +138,10 @@ enqueue_post(#state { concurrency = C, queue_size = QS, tokens = T }, [], R) ->
 
 %% MARKING WORK AS DONE
 %% ----------------------------------------------------------------------
+
+%%%% Case 8: Done no more work
+%%%% Case 9: Done, no more tokens
+%%%% Case 10: Done, run next
 done() ->
     case manager:mark_done() of
         {ok, Pid} ->
@@ -166,47 +153,24 @@ done() ->
             {error, none_working}
     end.
 
-%%%% Case 8: Done no more work
-done_no_work() -> done().
+done_command(_S) ->
+    {call, ?MODULE, done, []}.
 
-done_no_work_command(_S) ->
-    {call, ?MODULE, done_no_work, []}.
+done_pre(#state { concurrency = 1 }) -> true;
+done_pre(_) -> false.
 
-done_no_work_pre(#state { concurrency = 1, queue_size = 0 }) -> true;
-done_no_work_pre(_) -> false.
 
-done_no_work_next(S, _, _) -> S#state { concurrency = 0 }.
+done_next(#state { concurrency = 1, queue_size = 1, tokens = 0 } = S, _, _) -> S#state { concurrency = 0 };
+done_next(#state { concurrency = 1, queue_size = 1, tokens = 1 } = S, _, _) -> S#state { queue_size = 0, tokens = 0 };
+done_next(#state { concurrency = 1, queue_size = 0 } = S, _, _) -> S#state { concurrency = 0 }.
 
-done_no_work_post(_S, [], {res, done}) -> true;
-done_no_work_post(_S, [], Res) -> {error, {done_no_work, Res}}.
-
-%%%% Case 9: Done, no more tokens
-done_no_tokens() -> done().
-
-done_no_tokens_command(_S) ->
-    {call, ?MODULE, done_no_tokens, []}.
-
-done_no_tokens_pre(#state { concurrency = 1, queue_size = 1, tokens = 0 }) ->
-    true;
-done_no_tokens_pre(_) -> false.
-
-done_no_tokens_next(S, _, _) -> S#state { concurrency = 0 }.
-
-done_no_tokens_post(_S, [], {res, done}) -> true;
-done_no_tokens_post(_S, [], Res) -> {error, {done_no_tokens, Res}}.
-
-%%%% Case 10: Done, run next
-done_go_on() -> done().
-
-done_go_on_command(_S) ->
-    {call, ?MODULE, done_go_on, []}.
-
-done_go_on_pre(#state { concurrency = 1, queue_size = 1, tokens = 1 }) ->
-    true;
-done_go_on_pre(_) -> false.
-
-done_go_on_next(S, _, _) ->
-    S#state { queue_size = 0, tokens = 0 }.
+done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
+    case {C, QS, T, Res} of
+        {1, 0, _, {res, done}} -> true;
+        {1, 1, 0, {res, done}} -> true;
+        {1, 1, 1, {res, done}} -> true;
+        R -> {error, {done, R}}
+    end.
 
 %% WEIGHTS
 %% ----------------------------------------------------------------------
@@ -221,9 +185,12 @@ weight(#state { concurrency = C, queue_size = QS, tokens = T }, enqueue) ->
         {0, 0, 1} -> 100;
         {1, 0, 1} -> 800
     end;
-weight(_S, done_no_work)      -> 100;
-weight(_S, done_no_tokens)    -> 800;
-weight(_S, done_go_on)        -> 1500.
+weight(#state { concurrency = C, queue_size = QS, tokens = T }, done) ->
+    case {C, QS, T} of
+        {1, 0, _} -> 100;
+        {1, 1, 0} -> 800;
+        {1, 1, 1} -> 1500
+    end.
 
 %% PROPERTIES
 %% ----------------------------------------------------------------------
