@@ -63,7 +63,7 @@ gen_initial_state() ->
     #state { concurrency = 0,
              queue_size  = 0,
              tokens      = 1,
-             max_queue_size = choose(2, 5)
+             max_queue_size = 1
            }.
 
 %% POLLING OF THE QUEUE
@@ -83,19 +83,19 @@ poll_command(_S) ->
 poll_next(#state { concurrency = C, queue_size = QS, tokens = T } = S, _, _) ->
     case {C, QS, T} of
         {_, _, 1} -> S;
-        {1, 1, 0} -> S#state { tokens = 1 };
+        {1, _, 0} -> S#state { tokens = 1 };
         {_, 0, 0} -> S#state { tokens = 1 };
-        {0, 1, 0} -> S#state { concurrency = 1,
-                               queue_size = 0,
-                               tokens = 0 }
+        {0, K, 0} when K > 0 -> S#state { concurrency = 1,
+                                          queue_size = K-1,
+                                          tokens = 0 }
     end.
 
 poll_post(#state { concurrency = C, queue_size = QS, tokens = T}, _, Res) ->
     case {C, QS, T, Res} of
         {_, _, 1, 1} -> true;
-        {1, 1, 0, 1} -> true;
+        {1, _, 0, 1} -> true;
         {_, 0, 0, 1} -> true;
-        {0, 1, 0, 0} -> true;
+        {0, K, 0, 0} when K > 0 -> true;
         _ -> {error, {poll, Res}}
     end.
 
