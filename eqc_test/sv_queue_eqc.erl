@@ -119,20 +119,22 @@ enqueue() ->
 enqueue_command(_S) ->
     {call, ?MODULE, enqueue, []}.
 
-enqueue_next(#state { concurrency = C, queue_size = QS, tokens = T } = S, _, _) ->
+enqueue_next(#state { concurrency = C, queue_size = QS, tokens = T,
+                      max_queue_size = MaxQ } = S, _, _) ->
     case {C, QS, T} of
-        {_, 1, _} -> S;
-        {_, 0, 0} -> S#state { queue_size = 1 };
+        {_, K, _} when K == MaxQ -> S;
+        {_, K, 0} when K <  MaxQ -> S#state { queue_size = K+1 };
         {0, 0, 1} -> S#state { concurrency = 1, queue_size = 0, tokens = 0 };
-        {1, 0, 1} -> S#state { queue_size = 1 }
+        {1, K, 1} when K < MaxQ -> S#state { queue_size = K+1 }
     end.
 
-enqueue_post(#state { concurrency = C, queue_size = QS, tokens = T }, [], R) ->
+enqueue_post(#state { concurrency = C, queue_size = QS, tokens = T,
+                      max_queue_size = MaxQ }, [], R) ->
     case {C, QS, T, R} of
-        {_, 1, _, {{res, {error, queue_full}}, _}} -> true;
-        {_, 0, 0, {queueing, 0}} -> true;
+        {_, K, _, {{res, {error, queue_full}}, _}} when K == MaxQ -> true;
+        {_, K, 0, {queueing, 0}} when K < MaxQ -> true;
         {0, 0, 1, {{working, _}, 0}} -> true;
-        {1, 0, 1, {queueing, 1}} -> true;
+        {1, K, 1, {queueing, 1}} when K < MaxQ -> true;
         _ -> {error, {enqueue_to_wait, R}}
     end.
 
