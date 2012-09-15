@@ -67,9 +67,10 @@
 %% us when we are testing this. 
 -record(state,
         { concurrency,
-          max_queue_size,
           queue_size,
-          tokens }).
+          tokens,
+          max_queue_size
+        }).
 
 -define(Q, test_queue_1).
 
@@ -79,7 +80,7 @@ gen_initial_state() ->
     #state { concurrency = 0,
              queue_size  = 0,
              tokens      = 1,
-             max_queue_size = choose(1, 5)
+             max_queue_size = choose(2, 5)
            }.
 
 %% POLLING OF THE QUEUE
@@ -121,71 +122,36 @@ poll_post(#state { concurrency = C, queue_size = QS, tokens = T}, _, Res) ->
 %% The queueing command is generic. It does the same thing: spawn a
 %% new worker, wait until the system reaches a fixpoint and then read
 %% out the workers status.
+
+%%%% Case 4: Enqueueing on a full queue
+%%%% Case 5: Enqueuing when there is no available token
+%%%% Case 6: Enqueueing when there is a token and no worker
+%%%% Case 7: Enqueueing when there is a worker
 enqueue() ->
     {ok, Pid} = manager:spawn_worker(),
     timer:sleep(1),
     eqc_helpers:fixpoint([whereis(manager) , whereis(?Q) | manager:current_pids()]),
     {manager:read_status(Pid), sv_queue:q(?Q, tokens)}.
 
-%%%% Case 4: Enqueueing on a full queue
-enqueue_full() -> enqueue().
+enqueue_command(_S) ->
+    {call, ?MODULE, enqueue, []}.
 
-enqueue_full_command(_S) ->
-    {call, ?MODULE, enqueue_full, []}.
+enqueue_next(#state { concurrency = C, queue_size = QS, tokens = T } = S, _, _) ->
+    case {C, QS, T} of
+        {_, 1, _} -> S;
+        {_, 0, 0} -> S#state { queue_size = 1 };
+        {0, 0, 1} -> S#state { concurrency = 1, queue_size = 0, tokens = 0 };
+        {1, 0, 1} -> S#state { queue_size = 1 }
+    end.
 
-enqueue_full_pre(#state { queue_size = QS }) -> QS == 1.
-
-enqueue_full_next(S, _, _) -> S.
-
-enqueue_full_post(_S, [], {{res, {error, queue_full}}, _}) -> true;
-enqueue_full_post(_S, [], Res) -> {error, enqueue_full_post, Res}.
-
-%%%% Case 5: Enqueuing when there is no available token
-enqueue_no_tokens() -> enqueue().
-
-enqueue_no_tokens_command(_S) ->
-    {call, ?MODULE, enqueue_no_tokens, []}.
-
-enqueue_no_tokens_pre(#state { tokens = T,
-                               queue_size = Qs }) ->
-    T == 0 andalso Qs == 0.
-
-enqueue_no_tokens_next(S, _, _) -> S#state { queue_size = 1 }.
-
-enqueue_no_tokens_post(_S, [], {queueing, 0}) -> true;
-enqueue_no_tokens_post(_S, [], Res) -> {error, {enqueue_no_tokens, Res}}.
-
-%%%% Case 6: Enqueueing when there is a token and no worker
-enqueue_to_work() -> enqueue().
-
-enqueue_to_work_command(_S) ->
-    {call, ?MODULE, enqueue_to_work, []}.
-
-enqueue_to_work_pre(#state { tokens = 1, queue_size = 0, concurrency = 0 }) ->
-    true;
-enqueue_to_work_pre(_) -> false.
-
-enqueue_to_work_next(S, _, _) ->
-    S#state { tokens = 0, queue_size = 0, concurrency = 1 }.
-
-enqueue_to_work_post(_S, [], {{working, _}, 0}) -> true;
-enqueue_to_work_post(_S, [], Res) -> {error, {enqueue_to_work, Res}}.
-
-%%%% Case 7: Enqueueing when there is a worker    
-enqueue_to_wait() -> enqueue().
-
-enqueue_to_wait_command(_S) ->
-    {call, ?MODULE, enqueue_to_wait, []}.
-
-enqueue_to_wait_pre(#state { tokens = 1,
-                             queue_size = 0,
-                             concurrency = 1 }) -> true;
-enqueue_to_wait_pre(_)                          -> false.
-
-enqueue_to_wait_next(S, _, _) -> S#state { queue_size = 1 }.
-
-enqueue_to_wait_post(_S, [], {queueing, 1}) -> true;
-enqueue_to_wait_post(_S, [], Res)      -> {error, {enqueue_to_wait, Res}}.
+enqueue_post(#state { concurrency = C, queue_size = QS, tokens = T }, [], R) ->
+    case {C, QS, T, R} of
+        {_, 1, _, {{res, {error, queue_full}}, _}} -> true;
+        {_, 0, 0, {queueing, 0}} -> true;
+        {0, 0, 1, {{working, _}, 0}} -> true;
+        {1, 0, 1, {queueing, 1}} -> true;
+        _ -> {error, {enqueue_to_wait, R}}
+    end.
 
 %% MARKING WORK AS DONE
 %% ----------------------------------------------------------------------
@@ -247,11 +213,14 @@ done_go_on_next(S, _, _) ->
 weight(#state { tokens = 1 }, poll) -> 100;
 weight(#state { tokens = 0, queue_size = 0 }, poll) -> 100;
 weight(#state { tokens = 0, queue_size = 1, concurrency = 0}, poll) -> 150;
-weight(_s, poll) -> 100;
-weight(_S, enqueue_no_tokens) -> 80;
-weight(_S, enqueue_full)      -> 100;
-weight(_S, enqueue_to_work)   -> 100;
-weight(_S, enqueue_to_wait)   -> 800;
+weight(_S, poll) -> 100;
+weight(#state { concurrency = C, queue_size = QS, tokens = T }, enqueue) ->
+    case {C, QS, T} of
+        {_, 1, _} -> 100;
+        {_, 0, 0} -> 80;
+        {0, 0, 1} -> 100;
+        {1, 0, 1} -> 800
+    end;
 weight(_S, done_no_work)      -> 100;
 weight(_S, done_no_tokens)    -> 800;
 weight(_S, done_go_on)        -> 1500.
