@@ -34,16 +34,15 @@
 
 %% 1. Poll when full         : {x, y, 1} -> poll -> {x, y, 1}
 %% 2. poll, no queue ready   : {x, 0, 0} -> poll -> {x, 0, 1}
-%% 3. poll, queue ready      : {0, K, 0} when K > 0 -> poll-> {1, K-1, 0}
+%% 3. poll, queue ready      : {C, K, 0} when K > 0, C < MaxC -> poll-> {C+1, K-1, 0}
 %% 4. Full queue cases       : {x, K, y} when K == MaxQ -> queue -> {x, K, y} (denied)
-%%                           : {0, K, 1} when K > 0 -> *impossible* - should immediately go to {1, 0, 0}
-%% 5. Queue, no tokens       : {1, K, 0} when K < MaxQ -> queue -> {1, K+1, 0}
-%%                           : {0, K, 0} when K < MaxQ -> queue -> {0, K+1, 0}
-%% 6. Queue, to work         : {0, 0, 1} -> queue -> {1, 0, 0}
-%% 7. Queue, wait for worker : {1, K, 1} when K < MaxQ -> queue -> {1, K+1, 1}
-%% 8. Done - no more work    : {1, 0, x} -> done -> {0, 0, x}
-%% 9. Done - no more tokens  : {1, K, 0} -> done -> {0, K, 0}
-%% 10. Done - with tokens    : {1, K, 1} -> done -> {1, K-1, 0}
+%%                           : {C, K, 1} when K > 0 -> *impossible* - should immediately go to {C+1, 0, 0}
+%% 5. Queue, no tokens       : {C, K, 0} when K < MaxQ -> queue -> {C, K+1, 0}
+%% 6. Queue, to work         : {C, 0, 1} when C < MaxC -> queue -> {C+1, 0, 0}
+%% 7. Queue, wait for worker : {C, K, 1} when K < MaxQ, C == MaxC -> queue -> {MaxC, K+1, 1}
+%% 8. Done - no more work    : {C, 0, x} when C > 0 -> done -> {C-1, 0, x}
+%% 9. Done - no more tokens  : {C, K, 0} when C > 0 -> done -> {C-1, K, 0}
+%% 10. Done - with tokens    : {C, K, 1} when C > 0 -> done -> {C-1, K-1, 0}
 
 %% All in all, there are 10 possible transition commands available to
 %% us when we are testing this. These can be coalesced by considering
