@@ -166,7 +166,7 @@ done_next(#state { concurrency = C, queue_size = QS, tokens = T } = S, _, _) ->
     case {C, QS, T} of
         {1, 0, _} -> S#state { concurrency = 0 };
         {1, K, 0} when K > 0 -> S#state { concurrency = 0 };
-        {1, K, 1} when K > 0 -> S#state { queue_size = 0, tokens = 0 }
+        {1, K, 1} when K > 0 -> S#state { queue_size = K-1, tokens = 0 }
     end.
 
 done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
