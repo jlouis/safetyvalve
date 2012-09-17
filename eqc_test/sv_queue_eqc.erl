@@ -5,12 +5,13 @@
 %% and then extend it. In our case, we have an extremely degenerate queue:
 %%
 %% * The concurrency level on the queue is 1.
-%% * The queue size is 1, so there are at most a single waiter.
+%% * The queue size is K, so there are between 0 and K workers waiting
+%%   in the queue
 %% * The poll rate of the queue is 1 and maximum token count is 1.
 %%
 %% The postconditions we want to check are:
 %% * The concurrency level in the SUT is *never* more than 1.
-%% * The queue size in the SUT is *never* more than 1.
+%% * The queue size in the SUT is *never* more than K.
 %% * The maximum token count is *never* more than 1.
 %%
 %% So if we spawn a new process when the queue is full, we expect that
@@ -180,7 +181,6 @@ done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
 %% WEIGHTS
 %% ----------------------------------------------------------------------
 
-%% TODO: Write this in the other style
 weight(#state { concurrency = C, queue_size = QS, tokens = T }, poll) ->
     case {C, QS, T} of
         {_, _, 1} -> 100;
