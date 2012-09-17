@@ -26,8 +26,8 @@ described below what this configuration means):
 QDef = {my_queue, [{hz, undefined},
                    {rate, 1},
                    {token_limit, 1},
-                   {size, 1},
-                   {concurrency, 1}]}
+                   {size, N}, %% For any N > 0
+                   {concurrency, K }]} %% For any K > 0
 ```
 
 For this configuration we have passed the QuickCheck model. While this
@@ -64,18 +64,13 @@ also possible to specify `undefined` in which case it will never poll.
 You have to call `sv_queue:poll(QName)` to manually poll. This is very
 useful for testing!
 
-The `rate` is the number of tokens to add per poll.
-
-The `token_limit` configures how many tokens there can be in the
-bucket at a given point in time. This allows you to "burst" out
-quickly in the beginning.
-
-The `size` parameter configures the size of the queue (*NOTE*:
-Currently we can't honor this).
-
-The `concurrency` parameter configures how many concurrent jobs/tasks
-this queue will allow once a task has gotten the "go" signal. (*NOTE*:
-Currently we ignore this value).
+* The `rate` is the number of tokens to add per poll.
+* The `token_limit` configures how many tokens there can be in the
+  bucket at a given point in time. This allows you to "burst" out
+  quickly in the beginning.
+* The `size` parameter configures the size of the queue
+* The `concurrency` parameter configures how many concurrent jobs/tasks
+  this queue will allow once a task has gotten the "go" signal.
 
 Then, to get jobs onto this queue, do the following
 
