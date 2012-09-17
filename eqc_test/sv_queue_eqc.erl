@@ -52,6 +52,7 @@
         { concurrency,
           queue_size,
           tokens,
+          max_concurrency,
           max_queue_size
         }).
 
@@ -63,6 +64,7 @@ gen_initial_state() ->
     #state { concurrency = 0,
              queue_size  = 0,
              tokens      = 1,
+             max_concurrency = 1,
              max_queue_size = choose(1,5)
            }.
 
@@ -80,22 +82,33 @@ poll() ->
 poll_command(_S) ->
     {call, ?MODULE, poll, []}.
 
-poll_next(#state { concurrency = C, queue_size = QS, tokens = T } = S, _, _) ->
-    case {C, QS, T} of
+poll_next(#state { concurrency = Conc,
+                   queue_size = QS,
+                   tokens = T,
+                   max_concurrency = MaxC } = S, _, _) ->
+    case {Conc, QS, T} of
+        %% Tokens filled up
         {_, _, 1} -> S;
-        {1, _, 0} -> S#state { tokens = 1 };
+        %% Nothing to dequeue
         {_, 0, 0} -> S#state { tokens = 1 };
-        {0, K, 0} when K > 0 -> S#state { concurrency = 1,
-                                          queue_size = K-1,
-                                          tokens = 0 }
+        %% Concurrency count full
+        {MaxC, _, 0} -> S#state { tokens = 1 };
+
+        {C, K, 0} when K > 0, C < MaxC -> S#state { concurrency = C+1,
+                                                    queue_size = K-1,
+                                                    tokens = 0 }
     end.
 
-poll_post(#state { concurrency = C, queue_size = QS, tokens = T}, _, Res) ->
-    case {C, QS, T, Res} of
+poll_post(#state { concurrency = Conc,
+                   queue_size = QS,
+                   tokens = T,
+                   max_concurrency = MaxC
+                 }, _, Res) ->
+    case {Conc, QS, T, Res} of
         {_, _, 1, 1} -> true;
-        {1, _, 0, 1} -> true;
         {_, 0, 0, 1} -> true;
-        {0, K, 0, 0} when K > 0 -> true;
+        {MaxC, _, 0, 1} -> true;
+        {C, K, 0, 0} when K > 0, C < MaxC -> true;
         _ -> {error, {poll, Res}}
     end.
 
