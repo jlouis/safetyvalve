@@ -82,7 +82,10 @@ The result value `Res` will either be the output of the `work/0`
 function or the tuple `{error, Reason}` if there is some overload
 condition preventing it from running.
 
-# License
+# License and Copyright
 
-MIT
+The source code is Copyright Erlang Solutions Ltd.
+
+It is licensed under the Apache 2.0 License. See the file `LICENSE`
+in the repository for the details of this license.
 
