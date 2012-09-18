@@ -32,9 +32,9 @@
 %% tokens. These mandate when you can expect a certain command to be possible
 %% and also captures the possible transition states on the queue:
 
-%% 1. Poll when full         : {x, y, 1} -> poll -> {x, y, 1}
-%% 2. poll, no queue ready   : {x, 0, 0} -> poll -> {x, 0, 1}
-%% 3. poll, queue ready      : {C, K, 0} when K > 0, C < MaxC -> poll-> {C+1, K-1, 0}
+%% 1. Poll when full         : {x, y, MaxT} -> poll -> {x, y, MaxT}
+%% 2. poll, no queue ready   : {x, 0, T} when T < MaxT -> poll -> {x, 0, T+1}
+%% 3. poll, queue ready      : {C, K, T} when K > 0, C < MaxC, T < MaxT -> poll -> {C+1, K-1, T+1}
 %% 4. Full queue cases       : {x, K, y} when K == MaxQ -> queue -> {x, K, y} (denied)
 %%                           : {C, K, 1} when K > 0 -> *impossible* - should immediately go to {C+1, 0, 0}
 %% 5. Queue, no tokens       : {C, K, 0} when K < MaxQ -> queue -> {C, K+1, 0}
@@ -53,7 +53,8 @@
           queue_size,
           tokens,
           max_concurrency,
-          max_queue_size
+          max_queue_size,
+          max_tokens
         }).
 
 -define(Q, test_queue_1).
@@ -65,7 +66,8 @@ gen_initial_state() ->
              queue_size  = 0,
              tokens      = 1,
              max_concurrency = choose(1,5),
-             max_queue_size = choose(1,5)
+             max_queue_size = choose(1,5),
+             max_tokens  = 1
            }.
 
 %% POLLING OF THE QUEUE
@@ -85,15 +87,16 @@ poll_command(_S) ->
 poll_next(#state { concurrency = Conc,
                    queue_size = QS,
                    tokens = T,
-                   max_concurrency = MaxC } = S, _, _) ->
+                   max_concurrency = MaxC,
+                   max_tokens = MaxT } = S, _, _) ->
     case {Conc, QS, T} of
         %% Tokens filled up
-        {_, _, 1} -> S;
+        {_, _, MaxT} -> S;
         %% Nothing to dequeue
-        {_, 0, 0} -> S#state { tokens = 1 };
+        {_, 0, T} when T < MaxT -> S#state { tokens = T+1 };
         %% Concurrency count full
-        {MaxC, _, 0} -> S#state { tokens = 1 };
-
+        {MaxC, _, T} when T < MaxT -> S#state { tokens = T+1 };
+        %% Add work to the queue code
         {C, K, 0} when K > 0, C < MaxC -> S#state { concurrency = C+1,
                                                     queue_size = K-1,
                                                     tokens = 0 }
@@ -102,14 +105,15 @@ poll_next(#state { concurrency = Conc,
 poll_post(#state { concurrency = Conc,
                    queue_size = QS,
                    tokens = T,
-                   max_concurrency = MaxC
+                   max_concurrency = MaxC,
+                   max_tokens = MaxT
                  }, _, Res) ->
     case {Conc, QS, T, Res} of
-        {_, _, 1, 1} -> true;
-        {_, 0, 0, 1} -> true;
-        {MaxC, _, 0, 1} -> true;
-        {C, K, 0, 0} when K > 0, C < MaxC -> true;
-        _ -> {error, {poll, Res}}
+        {_,    _, MaxT, MaxT}                      -> true;
+        {_,    0, T,    R} when T < MaxT, R == T+1 -> true;
+        {MaxC, _, T,    R} when T < MaxT, R == T+1 -> true;
+        {C,    K, 0,    0} when K > 0, C < MaxC    -> true;
+        _                                          -> {error, {poll, Res}}
     end.
 
 %% ENQUEUEING
