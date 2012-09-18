@@ -38,11 +38,11 @@
 %% 4. Full queue cases       : {x, K, y} when K == MaxQ -> queue -> {x, K, y} (denied)
 %%                           : {C, K, 1} when K > 0 -> *impossible* - should immediately go to {C+1, 0, 0}
 %% 5. Queue, no tokens       : {C, K, 0} when K < MaxQ -> queue -> {C, K+1, 0}
-%% 6. Queue, to work         : {C, 0, 1} when C < MaxC -> queue -> {C+1, 0, 0}
-%% 7. Queue, wait for worker : {C, K, 1} when K < MaxQ, C == MaxC -> queue -> {MaxC, K+1, 1}
+%% 6. Queue, to work         : {C, 0, T} when C < MaxC, T > 0 -> queue -> {C+1, 0, T-1}
+%% 7. Queue, wait for worker : {C, K, T} when K < MaxQ, C == MaxC, T > 0 -> queue -> {MaxC, K+1, T}
 %% 8. Done - no more work    : {C, 0, x} when C > 0 -> done -> {C-1, 0, x}
 %% 9. Done - no more tokens  : {C, K, 0} when C > 0 -> done -> {C-1, K, 0}
-%% 10. Done - with tokens    : {C, K, 1} when C > 0 -> done -> {C-1, K-1, 0}
+%% 10. Done - with tokens    : {C, K, T} when C > 0, K > 0, T > 0 -> done -> {C, K-1, T-1}
 
 %% All in all, there are 10 possible transition commands available to
 %% us when we are testing this. These can be coalesced by considering
@@ -67,7 +67,7 @@ gen_initial_state() ->
              tokens      = 1,
              max_concurrency = choose(1,5),
              max_queue_size = choose(1,5),
-             max_tokens  = 1
+             max_tokens  = choose(1,5)
            }.
 
 %% POLLING OF THE QUEUE
@@ -142,10 +142,10 @@ enqueue_next(#state { concurrency = Conc, queue_size = QS, tokens = T,
     case {Conc, QS, T} of
         {_, K, _} when K == MaxQ -> S;
         {_, K, 0} when K <  MaxQ -> S#state { queue_size = K+1 };
-        {C, 0, 1} when C < MaxC  -> S#state { concurrency = C+1,
-                                              queue_size = 0,
-                                              tokens = 0 };
-        {MaxC, K, 1} when K < MaxQ -> S#state { queue_size = K+1 }
+        {C, 0, T} when C < MaxC, T > 0 -> S#state { concurrency = C+1,
+                                                    queue_size = 0,
+                                                    tokens = T-1 };
+        {MaxC, K, T} when K < MaxQ, T > 0 -> S#state { queue_size = K+1 }
     end.
 
 enqueue_post(#state { concurrency = Conc, queue_size = QS, tokens = T,
@@ -154,8 +154,10 @@ enqueue_post(#state { concurrency = Conc, queue_size = QS, tokens = T,
     case {Conc, QS, T, R} of
         {_, K, _, {{res, {error, queue_full}}, _}} when K == MaxQ -> true;
         {_, K, 0, {queueing, 0}} when K < MaxQ -> true;
-        {C, 0, 1, {{working, _}, 0}} when C < MaxC -> true;
-        {MaxC, K, 1, {queueing, 1}} when K < MaxQ -> true;
+        {C, 0, T, {{working, _}, Ret}}
+          when C < MaxC, T > 0,
+               Ret == T-1 -> true;
+        {MaxC, K, T, {queueing, T}} when K < MaxQ, T > 0 -> true;
         _ -> {error, {enqueue, R}}
     end.
 
@@ -189,26 +191,37 @@ done_next(#state { concurrency = C,
                    queue_size = QS,
                    tokens = T } = S, _, _) ->
     case {C, QS, T} of
+        %% Done, but no-one in the queue waits
         {C, 0, _} when C > 0 -> S#state { concurrency = C-1 };
+        %% Done, but no tokens are available
         {C, K, 0} when C > 0, K > 0 -> S#state { concurrency = C-1 };
-        {C, K, 1} when C > 0, K > 0 -> S#state { queue_size = K-1, tokens = 0 }
+        %% Done, and we can start next job
+        {C, K, T}
+          when C > 0,
+               K > 0,
+               T > 0 -> S#state { queue_size = K-1, tokens = T-1 }
     end.
 
 done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
     case {C, QS, T, Res} of
-        {C, 0, _, {{res, done}, T}} when C > 0        -> true;
-        {C, K, 0, {{res, done}, 0}} when C > 0, K > 0 -> true;
-        {C, K, 1, {{res, done}, 0}} when C > 0, K > 0 -> true;
-        R -> {error, {done, R}}
+        {C, 0, _, {{res, done}, T}}
+          when C > 0        -> true;
+        {C, K, 0, {{res, done}, 0}}
+          when C > 0, K > 0 -> true;
+        {C, K, T, {{res, done}, R}}
+          when C > 0, K > 0, T > 0,
+               R == T-1     -> true;
+        R                   -> {error, {done, R}}
     end.
 
 %% WEIGHTS
 %% ----------------------------------------------------------------------
 
-weight(#state { concurrency = C, queue_size = QS, tokens = T }, replenish) ->
+weight(#state { concurrency = C, queue_size = QS, tokens = T,
+                max_tokens = MaxT }, replenish) ->
     case {C, QS, T} of
-        {_, _, 1} -> 100;
-        {_, 0, 0} -> 100;
+        {_, _, MaxT} -> 100;
+        {_, 0, T} when T > 0 -> 100;
         {0, K, 0} when K > 0 -> 150;
         _         -> 100
     end;
@@ -216,25 +229,27 @@ weight(#state { concurrency = C, queue_size = QS, tokens = T }, enqueue) ->
     case {C, QS, T} of
         {_, K, _} when K > 0 -> 100;
         {_, 0, 0} -> 80;
-        {0, 0, 1} -> 100;
-        {C, 0, 1} when C > 0 -> 800
+        {0, 0, T} when T > 0 -> 100;
+        {C, 0, T} when C > 0, T > 0 -> 800
     end;
 weight(#state { concurrency = C, queue_size = QS, tokens = T }, done) ->
     case {C, QS, T} of
         {_, 0, _} -> 100;
         {_, K, 0} when K > 0 -> 800;
-        {_, K, 1} when K > 0 -> 1500
+        {_, K, T} when K > 0, T > 0 -> 1500
     end.
 
 %% PROPERTIES
 %% ----------------------------------------------------------------------
 
 set_queue(#state { max_queue_size = MaxQ,
-                   max_concurrency = MaxC }) ->
+                   max_concurrency = MaxC,
+                   max_tokens = MaxT
+                 }) ->
     ok = application:set_env(safetyvalve, queues,
                              [{test_queue_1, [{hz, undefined},
                                               {rate, 1},
-                                              {token_limit, 1},
+                                              {token_limit, MaxT},
                                               {size, MaxQ},
                                               {concurrency, MaxC}
                                              ]}]).
@@ -263,4 +278,4 @@ t() ->
     application:start(compiler),
     application:start(lager),
     application:load(safetyvalve),
-    eqc:module({numtests, 300}, ?MODULE).
+    eqc:module({numtests, 500}, ?MODULE).
