@@ -72,19 +72,19 @@ gen_initial_state() ->
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
-poll() ->
+replenish() ->
     sv_queue:poll(?Q),
     timer:sleep(1),
     eqc_helpers:fixpoint([whereis(?Q)]),
     sv_queue:q(?Q, tokens).
 
-%%%% Case 1: polling the queue, when the token bucket is full
-%%%% Case 2: polling the queue, when there is no-one queued
-%%%% Case 3: polling the queue, when there is a waiter and no-one working
-poll_command(_S) ->
-    {call, ?MODULE, poll, []}.
+%%%% Case 1: replenishing the queue, when the token bucket is full
+%%%% Case 2: replenishing the queue, when there is no-one queued
+%%%% Case 3: replenishing the queue, when there is a waiter and no-one working
+replenish_command(_S) ->
+    {call, ?MODULE, replenish, []}.
 
-poll_next(#state { concurrency = Conc,
+replenish_next(#state { concurrency = Conc,
                    queue_size = QS,
                    tokens = T,
                    max_concurrency = MaxC,
@@ -102,7 +102,7 @@ poll_next(#state { concurrency = Conc,
                                                     tokens = 0 }
     end.
 
-poll_post(#state { concurrency = Conc,
+replenish_post(#state { concurrency = Conc,
                    queue_size = QS,
                    tokens = T,
                    max_concurrency = MaxC,
@@ -113,7 +113,7 @@ poll_post(#state { concurrency = Conc,
         {_,    0, T,    R} when T < MaxT, R == T+1 -> true;
         {MaxC, _, T,    R} when T < MaxT, R == T+1 -> true;
         {C,    K, 0,    0} when K > 0, C < MaxC    -> true;
-        _                                          -> {error, {poll, Res}}
+        _                                          -> {error, {replenish, Res}}
     end.
 
 %% ENQUEUEING
@@ -205,7 +205,7 @@ done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
 %% WEIGHTS
 %% ----------------------------------------------------------------------
 
-weight(#state { concurrency = C, queue_size = QS, tokens = T }, poll) ->
+weight(#state { concurrency = C, queue_size = QS, tokens = T }, replenish) ->
     case {C, QS, T} of
         {_, _, 1} -> 100;
         {_, 0, 0} -> 100;
