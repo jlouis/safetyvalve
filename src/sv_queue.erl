@@ -69,11 +69,13 @@ start_link(Name, Conf) ->
     gen_server:start_link({local, Name}, ?MODULE, [Conf], []).
 
 parse_configuration(Conf) ->
-    #conf { hz          = proplists:get_value(hz, Conf),
-            rate        = proplists:get_value(rate, Conf),
-            token_limit = proplists:get_value(token_limit, Conf),
-            size        = proplists:get_value(size, Conf),
-            concurrency = proplists:get_value(concurrency, Conf) }.
+    #conf {
+      hz = proplists:get_value(hz, Conf),
+      rate = proplists:get_value(rate, Conf),
+      token_limit = proplists:get_value(token_limit, Conf),
+      size = proplists:get_value(size, Conf),
+      concurrency = proplists:get_value(concurrency, Conf)
+    }.
 
 ask(Name) ->
     gen_server:call(Name, ask, infinity).
@@ -146,7 +148,8 @@ handle_cast(_Msg, State) ->
 
 %% @private
 handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
-    {noreply, State#state { tasks = gb_sets:del_element(Ref, TS) }};
+    NewState = process_queue(State#state { tasks = gb_sets:del_element(Ref, TS) }),
+    {noreply, NewState};
 handle_info(poll, #state { conf = C } = State) ->
     NewState = process_queue(refill_tokens(State)),
     repoll(C),
