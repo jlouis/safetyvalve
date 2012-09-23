@@ -100,10 +100,13 @@ replenish_next(#state { concurrency = Conc,
         {_, 0, T} when T < MaxT -> S#state { tokens = BucketCount };
         %% Concurrency count full
         {MaxC, _, T} when T < MaxT -> S#state { tokens = BucketCount };
-        %% Add work to the queue code
-        {C, K, 0} when K > 0, C < MaxC -> S#state { concurrency = C+1,
-                                                    queue_size = K-1,
-                                                    tokens = 0 }
+        %% Add work to the queue. Calculate how many workers there can be at most:
+        Workers = lists:min([K, MaxC - C, Rate]),
+        {C, K, 0} when K > 0, C < MaxC ->
+          S#state {
+           concurrency = C+Workers,
+           queue_size = K-Workers,
+           tokens = min(MaxT, Rate-Workers) }
     end.
 
 replenish_post(#state { concurrency = Conc,
@@ -114,11 +117,12 @@ replenish_post(#state { concurrency = Conc,
                    replenish_rate = Rate
                  }, _, Res) ->
     BucketCount = min(T+Rate, MaxT),
+    Workers = lists:min([QS, MaxC - Conc, Rate]),
     case {Conc, QS, T, Res} of
         {_,    _, MaxT, MaxT} -> true;
         {_,    0, T,    BucketCount} when T < MaxT -> true;
         {MaxC, _, T,    BucketCount} when T < MaxT -> true;
-        {C,    K, 0,    0} when K > 0, C < MaxC -> true;
+        {C,    K, 0,    Rate - Workers} when K > 0, C < MaxC -> true;
         _ -> {error, {replenish, Res}}
     end.
 
