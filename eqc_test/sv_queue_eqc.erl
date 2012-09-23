@@ -70,7 +70,7 @@ gen_initial_state() ->
       max_concurrency = choose(1,5),
       max_queue_size = choose(1,5),
       max_tokens  = choose(1,5),
-      rate = 1
+      rate = choose(1,5)
     }.
 
 %% POLLING OF THE QUEUE
@@ -253,13 +253,15 @@ weight(#state { concurrency = C, queue_size = QS, tokens = T }, done) ->
 %% PROPERTIES
 %% ----------------------------------------------------------------------
 
-set_queue(#state { max_queue_size = MaxQ,
-                   max_concurrency = MaxC,
-                   max_tokens = MaxT
-                 }) ->
+set_queue(
+        #state {
+          max_queue_size = MaxQ,
+          max_concurrency = MaxC,
+          max_tokens = MaxT,
+          rate = Rate }) ->
     ok = application:set_env(safetyvalve, queues,
                              [{test_queue_1, [{hz, undefined},
-                                              {rate, 1},
+                                              {rate, Rate},
                                               {token_limit, MaxT},
                                               {size, MaxQ},
                                               {concurrency, MaxC}
