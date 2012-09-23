@@ -62,13 +62,15 @@
 %% The intial queue state
 %% ----------------------------------------------------------------------
 gen_initial_state() ->
-    #state { concurrency = 0,
-             queue_size  = 0,
-             tokens      = 1,
-             max_concurrency = choose(1,5),
-             max_queue_size = choose(1,5),
-             max_tokens  = choose(1,5)
-           }.
+    #state {
+      concurrency = 0,
+      queue_size  = 0,
+      tokens      = 1,
+      max_concurrency = choose(1,5),
+      max_queue_size = choose(1,5),
+      max_tokens  = choose(1,5),
+      replenish_rate = 1
+    }.
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
@@ -88,14 +90,16 @@ replenish_next(#state { concurrency = Conc,
                    queue_size = QS,
                    tokens = T,
                    max_concurrency = MaxC,
-                   max_tokens = MaxT } = S, _, _) ->
+                   max_tokens = MaxT,
+                   replenish_rate = Rate } = S, _, _) ->
+    BucketCount = min(T+Rate, MaxT),
     case {Conc, QS, T} of
-        %% Tokens filled up
+        %% Token bucket is full
         {_, _, MaxT} -> S;
         %% Nothing to dequeue
-        {_, 0, T} when T < MaxT -> S#state { tokens = T+1 };
+        {_, 0, T} when T < MaxT -> S#state { tokens = BucketCount };
         %% Concurrency count full
-        {MaxC, _, T} when T < MaxT -> S#state { tokens = T+1 };
+        {MaxC, _, T} when T < MaxT -> S#state { tokens = BucketCount };
         %% Add work to the queue code
         {C, K, 0} when K > 0, C < MaxC -> S#state { concurrency = C+1,
                                                     queue_size = K-1,
@@ -106,14 +110,16 @@ replenish_post(#state { concurrency = Conc,
                    queue_size = QS,
                    tokens = T,
                    max_concurrency = MaxC,
-                   max_tokens = MaxT
+                   max_tokens = MaxT,
+                   replenish_rate = Rate
                  }, _, Res) ->
+    BucketCount = min(T+Rate, MaxT),
     case {Conc, QS, T, Res} of
-        {_,    _, MaxT, MaxT}                      -> true;
-        {_,    0, T,    R} when T < MaxT, R == T+1 -> true;
-        {MaxC, _, T,    R} when T < MaxT, R == T+1 -> true;
-        {C,    K, 0,    0} when K > 0, C < MaxC    -> true;
-        _                                          -> {error, {replenish, Res}}
+        {_,    _, MaxT, MaxT} -> true;
+        {_,    0, T,    BucketCount} when T < MaxT -> true;
+        {MaxC, _, T,    BucketCount} when T < MaxT -> true;
+        {C,    K, 0,    0} when K > 0, C < MaxC -> true;
+        _ -> {error, {replenish, Res}}
     end.
 
 %% ENQUEUEING
@@ -210,8 +216,8 @@ done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
           when C > 0, K > 0 -> true;
         {C, K, T, {{res, done}, R}}
           when C > 0, K > 0, T > 0,
-               R == T-1     -> true;
-        R                   -> {error, {done, R}}
+               R == T-1 -> true;
+        R -> {error, {done, R}}
     end.
 
 %% WEIGHTS
