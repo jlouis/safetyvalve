@@ -54,7 +54,8 @@
           tokens,
           max_concurrency,
           max_queue_size,
-          max_tokens
+          max_tokens,
+          rate
         }).
 
 -define(Q, test_queue_1).
@@ -69,7 +70,7 @@ gen_initial_state() ->
       max_concurrency = choose(1,5),
       max_queue_size = choose(1,5),
       max_tokens  = choose(1,5),
-      replenish_rate = 1
+      rate = 1
     }.
 
 %% POLLING OF THE QUEUE
@@ -91,7 +92,7 @@ replenish_next(#state { concurrency = Conc,
                    tokens = T,
                    max_concurrency = MaxC,
                    max_tokens = MaxT,
-                   replenish_rate = Rate } = S, _, _) ->
+                   rate = Rate } = S, _, _) ->
     BucketCount = min(T+Rate, MaxT),
     case {Conc, QS, T} of
         %% Token bucket is full
@@ -101,8 +102,8 @@ replenish_next(#state { concurrency = Conc,
         %% Concurrency count full
         {MaxC, _, T} when T < MaxT -> S#state { tokens = BucketCount };
         %% Add work to the queue. Calculate how many workers there can be at most:
-        Workers = lists:min([K, MaxC - C, Rate]),
         {C, K, 0} when K > 0, C < MaxC ->
+          Workers = lists:min([K, MaxC - C, Rate]),
           S#state {
            concurrency = C+Workers,
            queue_size = K-Workers,
@@ -114,7 +115,7 @@ replenish_post(#state { concurrency = Conc,
                    tokens = T,
                    max_concurrency = MaxC,
                    max_tokens = MaxT,
-                   replenish_rate = Rate
+                   rate = Rate
                  }, _, Res) ->
     BucketCount = min(T+Rate, MaxT),
     Workers = lists:min([QS, MaxC - Conc, Rate]),
@@ -122,7 +123,7 @@ replenish_post(#state { concurrency = Conc,
         {_,    _, MaxT, MaxT} -> true;
         {_,    0, T,    BucketCount} when T < MaxT -> true;
         {MaxC, _, T,    BucketCount} when T < MaxT -> true;
-        {C,    K, 0,    Rate - Workers} when K > 0, C < MaxC -> true;
+        {C,    K, 0,    R} when K > 0, C < MaxC, R == Rate - Workers -> true;
         _ -> {error, {replenish, Res}}
     end.
 
