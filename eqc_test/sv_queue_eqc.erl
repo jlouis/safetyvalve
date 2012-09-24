@@ -20,6 +20,23 @@
 %% We *do* want to generate random command sequences for our queue to
 %% check this however, hence we write a quickcheck test case for it.
 %%
+%%%%
+%%
+%% When the above idea works, we extend it. The new model changes the 0..1 values
+%% into 0..5 values on all points:
+%%
+%% * The concurrency level is between 1 and 5
+%% * The queue size is between 1 and 5
+%% * The poll rate of the queue is between 1 and 5. The maximum token count is between 1 and 5.
+%%
+%% This is a more advanced queue which will test correctness of most of the queue
+%% implementations we are looking at. It will be enough to check that queues are being
+%% handled correctly.
+%%
+%% Note: We have removed testing of queue *order*. That is, we don't care about fairness. The idea
+%% is that we can write a separate test case for this fairly easily.
+%%
+%% And now for the module:
 -module(sv_queue_eqc).
 
 -compile([export_all]).
