@@ -24,11 +24,14 @@ described below what this configuration means):
 
 ```
 QDef = {my_queue, [{hz, undefined},
-                   {rate, 1},
-                   {token_limit, 1},
-                   {size, N}, %% For any N > 0
-                   {concurrency, K }]} %% For any K > 0
+                   {rate, 1..5},
+                   {token_limit, 1..5},
+                   {size, 1..5},
+                   {concurrency, 1..5 }]}
 ```
+
+Where the value `1..5` means `choose(1,5)` in QuickCheck terminology. That is, we
+randomly select a value between 1 and 5 (inclusive).
 
 For this configuration we have passed the QuickCheck model. While this
 does not prove the system correct, it does argue most of the system
