@@ -128,7 +128,8 @@ replenish_next(#state { concurrency = Conc,
            tokens = BucketCount-Workers }
     end.
 
-replenish_post(#state { concurrency = Conc,
+replenish_post(#state {
+                   concurrency = Conc,
                    queue_size = QS,
                    tokens = T,
                    max_concurrency = MaxC,
@@ -136,7 +137,7 @@ replenish_post(#state { concurrency = Conc,
                    rate = Rate
                  }, _, Res) ->
     BucketCount = min(T+Rate, MaxT),
-    Workers = lists:min([QS, MaxC - Conc, Rate]),
+    Workers = lists:min([QS, MaxC - Conc, BucketCount]),
     case {Conc, QS, T, Res} of
         {_,    _, MaxT, MaxT} -> true;
         {_,    0, T,    BucketCount} when T < MaxT -> true;
