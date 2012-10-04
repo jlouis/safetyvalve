@@ -80,15 +80,16 @@
 %% The intial queue state
 %% ----------------------------------------------------------------------
 gen_initial_state() ->
+  ?LET({Rate, MaxTokens}, {choose(1,5), choose(1,5)},
     #state {
       concurrency = 0,
       queue_size  = 0,
-      tokens      = 1,
+      tokens      = min(Rate, MaxTokens),
       max_concurrency = choose(1,5),
       max_queue_size = choose(1,5),
-      max_tokens  = choose(1,5),
-      rate = choose(1,5)
-    }.
+      max_tokens  = MaxTokens,
+      rate = Rate
+    }).
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
@@ -124,7 +125,7 @@ replenish_next(#state { concurrency = Conc,
           S#state {
            concurrency = C+Workers,
            queue_size = K-Workers,
-           tokens = min(MaxT, Rate-Workers) }
+           tokens = Rate-Workers }
     end.
 
 replenish_post(#state { concurrency = Conc,

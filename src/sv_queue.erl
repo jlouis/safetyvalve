@@ -100,7 +100,7 @@ init([Conf]) ->
     end,
     {ok, #state{ conf = Conf,
                  queue = queue:new(),
-                 tokens = Conf#conf.rate,
+                 tokens = min(Conf#conf.rate, Conf#conf.token_limit),
                  tasks = gb_sets:empty() }}.
 
 %% @private
