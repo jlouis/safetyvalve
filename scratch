@@ -1,12 +1,13 @@
 Scratch pad for the safety-valve project:
 
 Links:
+---------------------------------------------------------------
 
   http://github.com/jlouis/safetyvalve
   http://github.com/uwiger/jobs
   
 TODO list:
-
+---------------------------------------------------------------
 
 → Run a series of tests on the code base where we substitute the current queue model
   with a new one.
@@ -31,4 +32,8 @@ TODO list:
 · Handle overload regulation:
   · Lukas Larsson's hint from Ericsson.
   · Ulf Wiger's points from `jobs' needs to be considered here as well.
+
+DONE:
+---------------------------------------------------------------
+OK Fix an error in sv_table_ets:out/1
 
