@@ -35,6 +35,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE). 
+-define(QUEUE, queue).
 
 -record(conf, { hz, rate, token_limit, size, concurrency }).
 -record(state, {
@@ -98,14 +99,14 @@ q(Name, Atom) ->
 init([Conf]) ->
     set_timer(Conf),
     {ok, #state{ conf = Conf,
-                 queue = queue:new(),
+                 queue = ?QUEUE:new(),
                  tokens = min(Conf#conf.rate, Conf#conf.token_limit),
                  tasks = gb_sets:empty() }}.
 
 %% @private
 handle_call({q, tokens}, _, #state { tokens = K } = State) ->
     {reply, K, State};
-handle_call({ask, _Timestamp}, {Pid, _Tag} = From,
+handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 		 #state {
 		 	tokens = K,
 			conf = Conf,
@@ -114,7 +115,7 @@ handle_call({ask, _Timestamp}, {Pid, _Tag} = From,
     %% Let the guy run, since we have excess tokens:
     case analyze_tasks(Tasks, Conf) of
         concurrency_full ->
-            case enqueue(From, Q, Conf) of
+            case enqueue(From, Timestamp, Q, Conf) of
                 {ok, NQ} ->
                     {noreply, State#state { queue = NQ}};
                 queue_full ->
@@ -125,13 +126,13 @@ handle_call({ask, _Timestamp}, {Pid, _Tag} = From,
             {reply, {go, Ref}, State#state { tokens = K-1,
                                              tasks  = gb_sets:add_element(Ref, Tasks) }}
     end;
-handle_call({ask, _Timestamp}, From,
+handle_call({ask, Timestamp}, From,
 	#state {
 		tokens = 0,
 		conf = Conf,
 		queue = Q } = State) ->
     %% No more tokens, queue the guy
-    case enqueue(From, Q, Conf) of
+    case enqueue(From, Timestamp, Q, Conf) of
         {ok, NQ} ->
             {noreply, State#state { queue = NQ } };
         queue_full ->
@@ -189,8 +190,8 @@ process_queue(Rem, Q, TS) ->
 process_queue(0, Q, TS, Started) ->
     {Started, Q, TS};
 process_queue(K, Q, TS, Started) ->
-    case queue:out(Q) of
-        {{value, {Pid, _} = From}, Q2} ->
+    case ?QUEUE:out(Q) of
+        {{value, {_Timestamp, {Pid, _}} = From}, Q2} ->
             Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
             process_queue(K-1, Q2, gb_sets:add_element(Ref, TS), Started+1);
@@ -198,10 +199,10 @@ process_queue(K, Q, TS, Started) ->
             {Started, Q2, TS}
     end.
 
-enqueue(Term, Q, #conf { size = Sz } ) ->
-    case queue:len(Q) of
+enqueue(Term, Timestamp, Q, #conf { size = Sz } ) ->
+    case ?QUEUE:len(Q) of
         K when K < Sz ->
-            {ok, queue:in(Term, Q)};
+            {ok, ?QUEUE:in({Timestamp, Term}, Q)};
         K when K == Sz ->
             queue_full
     end.
