@@ -29,7 +29,7 @@
 
 -export([parse_configuration/1]).
 
--export([poll/1, ask/1, ask/2, done/2, q/2]).
+-export([replenish/1, ask/1, ask/2, done/2, q/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -86,8 +86,8 @@ ask(Name, Timestamp) ->
 done(Name, Ref) ->
     gen_server:call(Name, {done, Ref}, infinity).
 
-poll(Name) ->
-    Name ! poll.
+replenish(Name) ->
+    Name ! replenish.
 
 q(Name, Atom) ->
     gen_server:call(Name, {q, Atom}).
@@ -96,11 +96,7 @@ q(Name, Atom) ->
 
 %% @private
 init([Conf]) ->
-    case Conf#conf.hz of
-        undefined -> ok;
-        K when is_integer(K) ->
-            repoll(Conf)
-    end,
+    set_timer(Conf),
     {ok, #state{ conf = Conf,
                  queue = queue:new(),
                  tokens = min(Conf#conf.rate, Conf#conf.token_limit),
@@ -157,9 +153,9 @@ handle_cast(_Msg, State) ->
 handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
     NewState = process_queue(State#state { tasks = gb_sets:del_element(Ref, TS) }),
     {noreply, NewState};
-handle_info(poll, #state { conf = C } = State) ->
+handle_info(replenish, #state { conf = C } = State) ->
     NewState = process_queue(refill_tokens(State)),
-    repoll(C),
+    set_timer(C),
     lager:debug("Tokens: ~p", [NewState#state.tokens]),
     {noreply, NewState};
 handle_info(_Info, State) ->
@@ -231,6 +227,6 @@ refill_tokens(#state { tokens = K,
                               {token_count, TokenCount}]),
     State#state { tokens = TokenCount }.
 
-repoll(#conf { hz = undefined }) -> ok;
-repoll(#conf { hz = Hz }) ->
-    erlang:send_after(Hz, self(), poll).
+set_timer(#conf { hz = undefined }) -> ok;
+set_timer(#conf { hz = Hz }) ->
+    erlang:send_after(Hz, self(), replenish).

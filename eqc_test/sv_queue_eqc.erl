@@ -107,7 +107,7 @@ advance_time_next(#state { time_point = X } = State, _, [Step]) ->
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
 replenish() ->
-    sv_queue:poll(?Q),
+    sv_queue:replenish(?Q),
     timer:sleep(1),
     eqc_helpers:fixpoint([whereis(?Q)]),
     sv_queue:q(?Q, tokens).
