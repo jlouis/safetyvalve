@@ -10,7 +10,7 @@ TODO list:
 
 → Run a series of tests on the code base where we substitute the current queue model
   with a new one.
-  · Fix a thing about timestamps in the model: Enqueueing advances time as well.
+  OK Fix a thing about timestamps in the model: Enqueueing advances time as well.
     If we don't implement this, we break the specification.
 · Run a tab-fix run over all files, so the tab-stop becomes more correct
 · Introduce timeouts on the queues.

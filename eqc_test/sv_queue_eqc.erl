@@ -185,11 +185,16 @@ enqueue_next(#state { concurrency = Conc, queue = Q, tokens = T,
                       max_concurrency = MaxC,
                       time_point = Ts } = S, _, _) ->
     case {Conc, length(Q), T} of
-        {_, K, _} when K == MaxQ -> S;
-        {_, K, 0} when K <  MaxQ -> S#state { queue = [Ts | Q] };
-        {C, 0, T} when C < MaxC, T > 0 -> S#state { concurrency = C+1,
-                                                    tokens = T-1 };
-        {MaxC, K, T} when K < MaxQ, T > 0 -> S#state { queue = [Ts | Q] }
+        {_, K, _} when K == MaxQ -> S#state { time_point = Ts + 1 ;
+        {_, K, 0} when K <  MaxQ ->
+        		S#state { queue = [Ts | Q], time_point = Ts + 1 };
+        {C, 0, T} when C < MaxC, T > 0 ->
+        		S#state {
+        			concurrency = C+1,
+        			time_point = Ts + 1,
+        			tokens = T-1 };
+        {MaxC, K, T} when K < MaxQ, T > 0 ->
+        		S#state { queue = [Ts | Q], time_point = Ts + 1 }
     end.
 
 enqueue_post(#state { concurrency = Conc, queue = Q, tokens = T,
