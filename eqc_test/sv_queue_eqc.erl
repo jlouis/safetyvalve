@@ -72,7 +72,8 @@
           max_concurrency,
           max_queue_size,
           max_tokens,
-          rate
+          rate,
+          time_point
         }).
 
 -define(Q, test_queue_1).
@@ -88,8 +89,20 @@ gen_initial_state() ->
       max_concurrency = choose(1,5),
       max_queue_size = choose(1,5),
       max_tokens  = MaxTokens,
-      rate = Rate
+      rate = Rate,
+      time_point = 0
     }).
+
+%% ADVANCING THE TIME
+%% ----------------------------------------------------------------------
+
+advance_time(_Step) -> ok.
+
+advance_time_command(_S) ->
+	{call, ?MODULE, advance_time, [choose(1, 100)]}.
+
+advance_time_next(#state { time_point = X } = State, _, [Step]) ->
+	State#state { time_point = X + Step }.
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
@@ -247,6 +260,7 @@ done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
 %% WEIGHTS
 %% ----------------------------------------------------------------------
 
+weight(_State, advance_time) -> 100;
 weight(#state { concurrency = C, queue_size = QS, tokens = T,
                 max_tokens = MaxT }, replenish) ->
     case {C, QS, T} of
