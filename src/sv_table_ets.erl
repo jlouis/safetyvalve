@@ -32,8 +32,9 @@ new(QName) ->
 out(QName) ->
 	case ets:first(QName) of
 		'$end_of_table' -> empty;
-		E ->
-			ets:delete_object(QName, E),
+		Key ->
+			[{_Ts, E}] = Obj = ets:lookup(QName, Key),
+			ets:delete_object(QName, Obj),
 			{value, E, QName}
 	end.
 	
