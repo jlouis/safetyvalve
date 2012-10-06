@@ -1,16 +1,16 @@
 %% A Simple worker process which tries to do work.
 -module(worker).
 
--export([start/0, start_link/0]).
+-export([start/1, start_link/1]).
 
-start() ->
-    proc_lib:spawn(fun do_work/0).
+start(TimePoint) ->
+    proc_lib:spawn(fun () -> do_work(TimePoint) end).
 
-start_link() ->
-    proc_lib:spawn_link(fun do_work/0).
+start_link(TimePoint) ->
+    proc_lib:spawn_link(fun () -> do_work(TimePoint) end).
 
-do_work() ->
-    case sv:run(test_queue_1,
+do_work(TimePoint) ->
+    case sv:run(test_queue_1, TimePoint,
                 fun () ->
                             done = manager:doing_work()
                 end) of

@@ -171,14 +171,14 @@ replenish_post(#state {
 %%%% Case 5: Enqueuing when there is no available token
 %%%% Case 6: Enqueueing when there is a token and no worker
 %%%% Case 7: Enqueueing when there is a worker
-enqueue() ->
-    {ok, Pid} = manager:spawn_worker(),
+enqueue(TimePoint) ->
+    {ok, Pid} = manager:spawn_worker(TimePoint),
     timer:sleep(1),
     eqc_helpers:fixpoint([whereis(manager) , whereis(?Q) | manager:current_pids()]),
     {manager:read_status(Pid), sv_queue:q(?Q, tokens)}.
 
-enqueue_command(_S) ->
-    {call, ?MODULE, enqueue, []}.
+enqueue_command(#state { time_point = TP }) ->
+    {call, ?MODULE, enqueue, [TP]}.
 
 enqueue_next(#state { concurrency = Conc, queue = Q, tokens = T,
                       max_queue_size = MaxQ,
@@ -194,7 +194,7 @@ enqueue_next(#state { concurrency = Conc, queue = Q, tokens = T,
 
 enqueue_post(#state { concurrency = Conc, queue = Q, tokens = T,
                       max_queue_size = MaxQ,
-                      max_concurrency = MaxC }, [], R) ->
+                      max_concurrency = MaxC }, [_], R) ->
     case {Conc, length(Q), T, R} of
         {_, K, _, {{res, {error, queue_full}}, _}} when K == MaxQ -> true;
         {_, K, 0, {queueing, 0}} when K < MaxQ -> true;
@@ -323,6 +323,8 @@ t() ->
     application:start(syntax_tools),
     application:start(compiler),
     application:start(lager),
+    % Set this when debugging errors to capture errors
+    %lager:set_loglevel(lager_console_backend, debug),
     application:load(safetyvalve),
     eqc:module({numtests, 500}, ?MODULE).
 

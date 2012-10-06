@@ -29,7 +29,7 @@
 
 -export([parse_configuration/1]).
 
--export([poll/1, ask/1, done/2, q/2]).
+-export([poll/1, ask/1, ask/2, done/2, q/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -77,7 +77,11 @@ parse_configuration(Conf) ->
     }.
 
 ask(Name) ->
-    gen_server:call(Name, ask, infinity).
+	ask(Name, sv:timestamp()).
+
+ask(Name, Timestamp) ->
+    gen_server:call(Name, {ask, Timestamp}, infinity).
+
 
 done(Name, Ref) ->
     gen_server:call(Name, {done, Ref}, infinity).
@@ -105,10 +109,12 @@ init([Conf]) ->
 %% @private
 handle_call({q, tokens}, _, #state { tokens = K } = State) ->
     {reply, K, State};
-handle_call(ask, {Pid, _Tag} = From, #state { tokens = K,
-                                       conf = Conf,
-                                       queue = Q,
-                                       tasks = Tasks } = State) when K > 0 ->
+handle_call({ask, _Timestamp}, {Pid, _Tag} = From,
+		 #state {
+		 	tokens = K,
+			conf = Conf,
+			queue = Q,
+			tasks = Tasks } = State) when K > 0 ->
     %% Let the guy run, since we have excess tokens:
     case analyze_tasks(Tasks, Conf) of
         concurrency_full ->
@@ -123,9 +129,11 @@ handle_call(ask, {Pid, _Tag} = From, #state { tokens = K,
             {reply, {go, Ref}, State#state { tokens = K-1,
                                              tasks  = gb_sets:add_element(Ref, Tasks) }}
     end;
-handle_call(ask, From, #state { tokens = 0,
-                                conf = Conf,
-                                queue = Q } = State) ->
+handle_call({ask, _Timestamp}, From,
+	#state {
+		tokens = 0,
+		conf = Conf,
+		queue = Q } = State) ->
     %% No more tokens, queue the guy
     case enqueue(From, Q, Conf) of
         {ok, NQ} ->

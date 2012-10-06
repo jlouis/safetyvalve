@@ -12,7 +12,7 @@
 
 %% API
 -export([start/0, start_link/0]).
--export([spawn_worker/0,
+-export([spawn_worker/1,
          current_pids/0,
          doing_work/0,
          mark_done/0,
@@ -45,8 +45,8 @@ start() ->
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-spawn_worker() ->
-    gen_server:call(?MODULE, spawn_worker).
+spawn_worker(TimePoint) ->
+    gen_server:call(?MODULE, {spawn_worker, TimePoint}).
 
 doing_work() ->
     gen_server:call(?MODULE, doing_work, infinity).
@@ -73,8 +73,8 @@ init([]) ->
     {ok, #state{ workers = [] }}.
 
 %% @private
-handle_call(spawn_worker, _From, #state { workers = Workers } = State) ->
-    Pid = worker:start(),
+handle_call({spawn_worker, TimePoint}, _From, #state { workers = Workers } = State) ->
+    Pid = worker:start(TimePoint),
     {reply, {ok, Pid}, State#state {workers = [{Pid, queueing} | Workers ] }};
 handle_call(doing_work, {Pid, _Tag} = From,
             #state { workers = Workers } = State) ->
