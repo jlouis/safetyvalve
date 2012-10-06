@@ -1,0 +1,34 @@
+Scratch pad for the safety-valve project:
+
+Links:
+
+  http://github.com/jlouis/safetyvalve
+  http://github.com/uwiger/jobs
+  
+TODO list:
+
+
+→ Run a series of tests on the code base where we substitute the current queue model
+  with a new one.
+  · Fix a thing about timestamps in the model: Enqueueing advances time as well.
+    If we don't implement this, we break the specification.
+· Run a tab-fix run over all files, so the tab-stop becomes more correct
+· Introduce timeouts on the queues.
+  Timeout is run when replenishing tokens. This requires a change to the model first,
+  where we should calculate, with respect to the current timepoint, what should expire
+  and then run a filter on the "queue".
+  
+  It is especially important to check this when we are running on the new sv_table_ets implementation.
+  
+· Add support for LIFO queues as well.
+  · First, change the model so we can run tests in LIFO order.
+  · Then change the code so we can run LIFO
+  
+· Import the Queue test code from Jobs. The verify queue ordering, it is probably
+  easier to just steal the code from jobs and use that code for testing. I already wrote
+  it there, so it should be fairly easy to import and use.
+  
+· Handle overload regulation:
+  · Lukas Larsson's hint from Ericsson.
+  · Ulf Wiger's points from `jobs' needs to be considered here as well.
+
