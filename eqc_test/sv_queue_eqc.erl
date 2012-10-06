@@ -67,7 +67,7 @@
 %% and done.
 -record(state,
         { concurrency,
-          queue_size,
+          queue,
           tokens,
           max_concurrency,
           max_queue_size,
@@ -84,7 +84,7 @@ gen_initial_state() ->
   ?LET({Rate, MaxTokens}, {choose(1,5), choose(1,5)},
     #state {
       concurrency = 0,
-      queue_size  = 0,
+      queue  = [],
       tokens      = min(Rate, MaxTokens),
       max_concurrency = choose(1,5),
       max_queue_size = choose(1,5),
@@ -119,13 +119,13 @@ replenish_command(_S) ->
     {call, ?MODULE, replenish, []}.
 
 replenish_next(#state { concurrency = Conc,
-                   queue_size = QS,
+                   queue = Q,
                    tokens = T,
                    max_concurrency = MaxC,
                    max_tokens = MaxT,
                    rate = Rate } = S, _, _) ->
     BucketCount = min(T+Rate, MaxT),
-    case {Conc, QS, T} of
+    case {Conc, length(Q), T} of
         %% Token bucket is full
         {_, _, MaxT} -> S;
         %% Nothing to dequeue
@@ -137,19 +137,20 @@ replenish_next(#state { concurrency = Conc,
           Workers = lists:min([K, MaxC - C, BucketCount]),
           S#state {
            concurrency = C+Workers,
-           queue_size = K-Workers,
+           queue = q_remove(Workers, Q),
            tokens = BucketCount-Workers }
     end.
 
 replenish_post(#state {
                    concurrency = Conc,
-                   queue_size = QS,
+                   queue = Q,
                    tokens = T,
                    max_concurrency = MaxC,
                    max_tokens = MaxT,
                    rate = Rate
                  }, _, Res) ->
     BucketCount = min(T+Rate, MaxT),
+    QS = length(Q),
     Workers = lists:min([QS, MaxC - Conc, BucketCount]),
     case {Conc, QS, T, Res} of
         {_,    _, MaxT, MaxT} -> true;
@@ -179,22 +180,22 @@ enqueue() ->
 enqueue_command(_S) ->
     {call, ?MODULE, enqueue, []}.
 
-enqueue_next(#state { concurrency = Conc, queue_size = QS, tokens = T,
+enqueue_next(#state { concurrency = Conc, queue = Q, tokens = T,
                       max_queue_size = MaxQ,
-                      max_concurrency = MaxC} = S, _, _) ->
-    case {Conc, QS, T} of
+                      max_concurrency = MaxC,
+                      time_point = Ts } = S, _, _) ->
+    case {Conc, length(Q), T} of
         {_, K, _} when K == MaxQ -> S;
-        {_, K, 0} when K <  MaxQ -> S#state { queue_size = K+1 };
+        {_, K, 0} when K <  MaxQ -> S#state { queue = [Ts | Q] };
         {C, 0, T} when C < MaxC, T > 0 -> S#state { concurrency = C+1,
-                                                    queue_size = 0,
                                                     tokens = T-1 };
-        {MaxC, K, T} when K < MaxQ, T > 0 -> S#state { queue_size = K+1 }
+        {MaxC, K, T} when K < MaxQ, T > 0 -> S#state { queue = [Ts | Q] }
     end.
 
-enqueue_post(#state { concurrency = Conc, queue_size = QS, tokens = T,
+enqueue_post(#state { concurrency = Conc, queue = Q, tokens = T,
                       max_queue_size = MaxQ,
                       max_concurrency = MaxC }, [], R) ->
-    case {Conc, QS, T, R} of
+    case {Conc, length(Q), T, R} of
         {_, K, _, {{res, {error, queue_full}}, _}} when K == MaxQ -> true;
         {_, K, 0, {queueing, 0}} when K < MaxQ -> true;
         {C, 0, T, {{working, _}, Ret}}
@@ -231,22 +232,21 @@ done_pre(_) -> false.
 %% TODO: The when C > 0's here are really redundant since the
 %% precondition filters out any problem.
 done_next(#state { concurrency = C,
-                   queue_size = QS,
+                   queue = Q,
                    tokens = T } = S, _, _) ->
-    case {C, QS, T} of
+    case {C, length(Q), T} of
         %% Done, but no-one in the queue waits
-        {C, 0, _} when C > 0 -> S#state { concurrency = C-1 };
+        {C, 0, _} -> S#state { concurrency = C-1 };
         %% Done, but no tokens are available
-        {C, K, 0} when C > 0, K > 0 -> S#state { concurrency = C-1 };
+        {C, K, 0} when K > 0 -> S#state { concurrency = C-1 };
         %% Done, and we can start next job
         {C, K, T}
-          when C > 0,
-               K > 0,
-               T > 0 -> S#state { queue_size = K-1, tokens = T-1 }
+          when K > 0,
+               T > 0 -> S#state { queue = q_remove(1, Q), tokens = T-1 }
     end.
 
-done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
-    case {C, QS, T, Res} of
+done_post(#state { concurrency = C, queue = Q, tokens = T }, _, Res) ->
+    case {C, length(Q), T, Res} of
         {C, 0, _, {{res, done}, T}}
           when C > 0        -> true;
         {C, K, 0, {{res, done}, 0}}
@@ -261,23 +261,23 @@ done_post(#state { concurrency = C, queue_size = QS, tokens = T }, _, Res) ->
 %% ----------------------------------------------------------------------
 
 weight(_State, advance_time) -> 100;
-weight(#state { concurrency = C, queue_size = QS, tokens = T,
+weight(#state { concurrency = C, queue = Q, tokens = T,
                 max_tokens = MaxT }, replenish) ->
-    case {C, QS, T} of
+    case {C, length(Q), T} of
         {_, _, MaxT} -> 100;
         {_, 0, T} when T > 0 -> 100;
         {0, K, 0} when K > 0 -> 150;
         _         -> 100
     end;
-weight(#state { concurrency = C, queue_size = QS, tokens = T }, enqueue) ->
-    case {C, QS, T} of
+weight(#state { concurrency = C, queue = Q, tokens = T }, enqueue) ->
+    case {C, length(Q), T} of
         {_, K, _} when K > 0 -> 100;
         {_, 0, 0} -> 80;
         {0, 0, T} when T > 0 -> 100;
         {C, 0, T} when C > 0, T > 0 -> 800
     end;
-weight(#state { concurrency = C, queue_size = QS, tokens = T }, done) ->
-    case {C, QS, T} of
+weight(#state { concurrency = C, queue = Q, tokens = T }, done) ->
+    case {C, length(Q), T} of
         {_, 0, _} -> 100;
         {_, K, 0} when K > 0 -> 800;
         {_, K, T} when K > 0, T > 0 -> 1500
@@ -325,3 +325,12 @@ t() ->
     application:start(lager),
     application:load(safetyvalve),
     eqc:module({numtests, 500}, ?MODULE).
+
+%% HELPER FUNCTIONS
+%% ----------------------------------------------------------------------
+q_remove(0, Q) -> Q;
+q_remove(_N, []) -> exit(fail);
+q_remove(N, Q) when is_list(Q) ->
+	M = lists:min(Q),
+	NQ = lists:delete(M, Q),
+	q_remove(N-1, NQ).
