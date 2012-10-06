@@ -1,4 +1,5 @@
 *.beam
+commit
 /deps/
 /ebin/safetyvalve.app
 /log/
