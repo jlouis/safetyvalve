@@ -191,7 +191,7 @@ process_queue(0, Q, TS, Started) ->
     {Started, Q, TS};
 process_queue(K, Q, TS, Started) ->
     case ?QUEUE:out(Q) of
-        {{value, {_Timestamp, {Pid, _}} = From}, Q2} ->
+        {{value, {_Timestamp, {Pid, _} = From}}, Q2} ->
             Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
             process_queue(K-1, Q2, gb_sets:add_element(Ref, TS), Started+1);
