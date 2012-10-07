@@ -185,7 +185,7 @@ enqueue_next(#state { concurrency = Conc, queue = Q, tokens = T,
                       max_concurrency = MaxC,
                       time_point = Ts } = S, _, _) ->
     case {Conc, length(Q), T} of
-        {_, K, _} when K == MaxQ -> S#state { time_point = Ts + 1 ;
+        {_, K, _} when K == MaxQ -> S#state { time_point = Ts + 1};
         {_, K, 0} when K <  MaxQ ->
         		S#state { queue = [Ts | Q], time_point = Ts + 1 };
         {C, 0, T} when C < MaxC, T > 0 ->
@@ -323,15 +323,6 @@ prop_model() ->
                        end)
                    )
            ).
-
-t() ->
-    application:start(syntax_tools),
-    application:start(compiler),
-    application:start(lager),
-    % Set this when debugging errors to capture errors
-    %lager:set_loglevel(lager_console_backend, debug),
-    application:load(safetyvalve),
-    eqc:module({numtests, 500}, ?MODULE).
 
 %% HELPER FUNCTIONS
 %% ----------------------------------------------------------------------
