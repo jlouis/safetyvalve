@@ -157,7 +157,6 @@ handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
 handle_info(replenish, #state { conf = C } = State) ->
     NewState = process_queue(refill_tokens(State)),
     set_timer(C),
-    lager:debug("Tokens: ~p", [NewState#state.tokens]),
     {noreply, NewState};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -222,10 +221,6 @@ refill_tokens(#state { tokens = K,
                        conf = #conf { rate = Rate,
                                       token_limit = TL }} = State) when K >= 0 ->
     TokenCount = min(K + Rate, TL),
-    error_logger:info_report([{k, K},
-                              {rate, Rate},
-                              {tl, TL},
-                              {token_count, TokenCount}]),
     State#state { tokens = TokenCount }.
 
 set_timer(#conf { hz = undefined }) -> ok;
