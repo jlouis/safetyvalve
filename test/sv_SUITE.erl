@@ -30,9 +30,18 @@ end_per_suite(_Config) ->
         App <- lists:reverse([syntax_tools, compiler, lager, safetyvalve])],
     ok.
 
+init_per_testcase(not_applicable, Config) ->
+    dbg:tracer(),
+    dbg:tpl({sv_queue_ets, in, 2}, cx),
+    dbg:tpl({queue, in, 2}, cx),
+    dbg:p(whereis(test_queue_1), [c]),
+    Config;
 init_per_testcase(_Case, Config) ->
     Config.
 
+end_per_testcase(not_applicable, _Config) ->
+    dbg:stop(),
+    ok;
 end_per_testcase(_Case, _Config) ->
     ok.
 
