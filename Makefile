@@ -1,3 +1,5 @@
+REPO=safetyvalve
+
 .PHONY: all compile deps clean test ct ct_setup
 
 all:
@@ -44,7 +46,7 @@ dialyzer:
 	@echo Use "'make build_plt'" to build PLT prior to using this target.
 	@echo
 	@sleep 1
-	dialyzer --plt $(COMBO_PLT) deps/*/ebin ebin | \
+	dialyzer --fullpath --plt $(COMBO_PLT) deps/*/ebin ebin | \
 	    fgrep -v -f ./dialyzer.ignore-warnings
 
 cleanplt:
