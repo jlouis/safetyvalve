@@ -31,8 +31,5 @@ timestamp() ->
 	%% Timestamps *have* to be unique. Calling erlang:now/0 makes sure
 	%% this happens. But you can use any ordered term if you want, for instance
 	%% {os:timestamp(), self()} or {os:timestamp(), ref()}.
-	{Mega, Secs, Micros} = erlang:now(),
-	Seconds = Mega * 1000000 + Secs,
-	Millis = Micros div 1000,
-	Seconds * 1000 + Millis.
+	erlang:now().
 
