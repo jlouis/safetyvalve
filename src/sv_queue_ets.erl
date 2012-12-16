@@ -20,7 +20,7 @@
 %%% can be used as a replacement for the `queue' module. It also tries to implement the same API
 %%% so the substitution is as easy as possible.
 %%% @end
--module(sv_table_ets).
+-module(sv_queue_ets).
 
 -export([new/1]).
 
