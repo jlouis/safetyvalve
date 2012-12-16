@@ -22,26 +22,26 @@
 %%% @end
 -module(sv_queue_ets).
 
--export([new/1]).
+-export([new/0]).
 
 -export([out/1, len/1, in/2]).
 
-new(QName) ->
-	ets:new(QName, [named_table, protected, ordered_set]).
+new() ->
+	ets:new(queue, [protected, ordered_set]).
 	
 out(QName) ->
 	case ets:first(QName) of
-		'$end_of_table' -> empty;
+		'$end_of_table' -> {empty, QName};
 		Key ->
 			[Obj] = ets:lookup(QName, Key),
-			ets:delete_object(QName, Obj),
-			{value, Obj, QName}
+			true = ets:delete_object(QName, Obj),
+			{{value, Obj}, QName}
 	end.
 	
 len(QName) ->
 	ets:info(QName, size).
 	
 %% Format is kept like this to make sure it follows that of the `queue' module.
-in({Item, Timestamp}, QName) ->
-	ets:insert_new(QName, {Timestamp, Item}),
+in({_Timestamp, _Item} = Entry, QName) ->
+	true = ets:insert_new(QName, Entry),
 	QName.
