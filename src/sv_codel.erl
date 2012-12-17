@@ -1,3 +1,8 @@
+%%% @doc This is a loose translation of the following link from ACM:
+%%% http://queue.acm.org/appendices/codel.html
+%%% The document you want to read is
+%%% "Controlling queue Delay" Kathleen Nichols, Van Jacobson, http://queue.acm.org/detail.cfm?id=2209336
+%%% @end
 -module(sv_codel).
 
 -export([init/0, enqueue/3, dequeue/2]).
