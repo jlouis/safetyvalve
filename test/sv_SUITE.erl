@@ -57,12 +57,12 @@ ping(_Config) ->
     ok.
 
 through(_Config) ->
-    ok = sv:run(test_queue_1, fun work/0).
+    {ok, ok} = sv:run(test_queue_1, fun work/0).
 
 many_through(_Config) ->
     Parent = self(),
     Pids = [spawn_link(fun() ->
-                               ok = sv:run(test_queue_1, fun work/0),
+                               {ok, ok} = sv:run(test_queue_1, fun work/0),
                                Parent ! {done, self()}
                        end) || _ <- lists:seq(1, 20)],
     ok = collect(Pids).
