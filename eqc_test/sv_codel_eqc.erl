@@ -3,48 +3,36 @@
 -compile([export_all]).
 
 -include_lib("eqc/include/eqc.hrl").
--include_lib("eqc/include/eqc_statem.hrl").
 -eqc_group_commands(true).
 
 -record(state,
     { ttd = 10,
-      t = 0
+      t = 0,
+      st
     }).
     
-%% ADVANCING THE TIME
-%% ----------------------------------------------------------------------
+g_time_advance(#state { ttd = N, t = T } = State) ->
+	?LET(K, choose(0, N),
+		State#state { ttid = N - K, t = T + K }).
+    
+g_model(0, todo) ->
+	oneof([{call, ?MODULE, new, []}]);
+g_model(N, todo) ->
+	frequency([
+		{1, g_model(0, todo)},
+		{N, ?LET(M, g_model(max(0, N-2), todo),
+		    frequency(
+		        [{200, {call, ?MODULE, advance_time, M, g_time_advance(M)}},
+		         {200, {call, ?MODULE, enqueue, [M]}},
+		         {100, {call, ?MODULE, dequeue, [M]}}
+		        ])}]).
 
-advance_time(_Step) -> ok.
+%% Operations
+%% ----------------------------------------------
 
-advance_time_command(#state { ttd = TTD}) ->
-	{call, ?MODULE, advance_time, [choose(0, TTD)]}.
+new() ->
+	#state { ttd = 10, t = 0, st = sv_codel:init() }.
 
-advance_time_pre(#state { ttd = TTD }) when TTD > 0 -> true;
-advance_time_pre(_S) -> false.
-
-advance_time_next(#state { t = T, ttd = TTD } = State, _, [Step]) ->
-	State#state { t = T + Step, ttd = TTD - Step}.
-
-dequeue() -> ok.
-
-dequeue_command(_S) ->
-	{call, ?MODULE, dequeue, []}.
+enqueue(State) -> State.
 	
-dequeue_pre(#state { ttd = 0 }) -> true;
-dequeue_pre(_S) -> false.
-
-dequeue_next(State, _, []) ->
-	State#state { ttd = 10 }.
-	
-prop_model() ->
-	?FORALL(Cmds, commands(?MODULE, #state{}),
-		?TRAPEXIT(
-			begin
-				{H, S, R} = run_commands(?MODULE, Cmds),
-				?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
-                                               [History, State, Result]),
-                                     aggregate(command_names(Cmds), Result =:= ok))
-                       end)
-                   )
-           ).
-
+dequeue(State) -> State.
