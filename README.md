@@ -5,6 +5,21 @@ Erlang systems. It provides queueing facilities for tasks to be
 executed so their concurrency and rate can be limited on a running
 system.
 
+# Using
+
+This project uses semantic versioning. Tags are declared like `vX.Y.Z`
+(do note the `v`). The meaning is:
+
+* X changes: There have been backwards-incompatible changes to the `sv` API functions which are meant to be the only functions exported. Or there has been changes to the way the configuration file format is specified.
+* Y changes: These are additions to the API, but existing functionality has not been broken.
+* Z changes: Bug fixes.
+
+# Changes
+
+### v0.1.0 -> v1.0.0
+
+The return value of `sv:run/3` changed from `Res | {error, Reason}` to `{ok, Res} | {error, Reason}`. This better reflects the system and we can distinguish between an error term from the function we run and safetyvalve itself.
+
 # Inspiration
 
 Safetyvalve owes its inspiration to Ulf Wigers `jobs` framework, but
