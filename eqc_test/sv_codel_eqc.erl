@@ -22,10 +22,13 @@ g_model(N, todo) ->
 		{1, g_model(0, todo)},
 		{N, ?LET(M, g_model(max(0, N-2), todo),
 		    frequency(
-		        [{200, {call, ?MODULE, advance_time, M, g_time_advance(M)}},
-		         {200, {call, ?MODULE, enqueue, [M]}},
-		         {100, {call, ?MODULE, dequeue, [M]}}
+		        [{200, {call, ?MODULE, advance_time, M, g_time_advance(M)}} || not boundary(M)] ++
+		        [{200, {call, ?MODULE, enqueue, [M]}}] ++
+		        [{100, {call, ?MODULE, dequeue, [M]}} || boundary(M)]
 		        ])}]).
+
+boundary(#state { ttd = 0 }) -> true;
+boundary(_) -> false.
 
 %% Operations
 %% ----------------------------------------------
@@ -33,6 +36,9 @@ g_model(N, todo) ->
 new() ->
 	#state { ttd = 10, t = 0, st = sv_codel:init() }.
 
-enqueue(State) -> State.
+enqueue(#state { t = T, st = ST } = State) ->
+	State#state { t = T+1, st = sv_codel:enqueue({pkt, T}, T, ST) }.
 	
-dequeue(State) -> State.
+dequeue(#state { t = T, st = ST }) ->
+	{_, ST2} = sv_codel:dequeue(T, ST),
+	State#state { t = T+1, ttd = 10, st = ST2 }.
