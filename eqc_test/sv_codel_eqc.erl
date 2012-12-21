@@ -51,7 +51,8 @@ prop_empty_q_no_drop() ->
             case sv_codel:dequeue(T+1, ST) of
                 {empty, _Dropped, EmptyState} ->
                     PL = sv_codel:qstate(EmptyState),
-                    not proplists:get_value(dropping, PL);
+                    not proplists:get_value(dropping, PL)
+                      andalso proplists:get_value(first_above_time, PL) == 0;
                 {ok, _Pkt, _Dropped, _SomeState} ->
                     true
             end
