@@ -7,6 +7,9 @@
 
 -export([init/0, enqueue/3, dequeue/2]).
 
+%% Scrutiny
+-export([qstate/1]).
+
 -record(state,
     { queue = queue:new(),
       dropping = false,
@@ -16,6 +19,23 @@
       first_above_time = 0,
       count = 0
     }).
+
+qstate(#state {
+	queue = Q,
+	dropping = Drop,
+	drop_next = DN,
+	interval = I,
+	target = T,
+	first_above_time = FAT,
+	count = C
+	}) ->
+    [{queue, Q},
+     {dropping, Drop},
+     {drop_next, DN},
+     {interval, I},
+     {target, T},
+     {first_above_time, FAT},
+     {count, C}].
 
 init() -> #state{}.
 
@@ -49,7 +69,7 @@ dodequeue(Now, #state {
 dequeue(Now, #state { dropping = Dropping } = State) ->
   case dodequeue(Now, State) of
     {nodrop, empty, NState} ->
-      {empty_queue, NState#state { dropping = false }};
+      {empty, [], NState#state { dropping = false }};
     {nodrop, Pkt, #state {} = NState} when Dropping ->
       {ok, Pkt, [], NState#state { dropping = false }};
     {drop, Pkt, #state { drop_next = DropNext } = NState} when Now >= DropNext ->

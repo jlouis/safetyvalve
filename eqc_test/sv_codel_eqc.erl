@@ -20,10 +20,10 @@ g_model(N, todo) ->
 		{1, g_model(0, todo)},
 		{N, ?LET(M, g_model(max(0, N-2), todo),
 		    frequency(
-		        [{100, {call, ?MODULE, advance_time,
+		        [{400, {call, ?MODULE, advance_time,
 		            [M, g_time_advance()]}} || not boundary(M)] ++
 		        [{100, {call, ?MODULE, enqueue, [M]}}] ++
-		        [{100, {call, ?MODULE, dequeue, [M]}} || boundary(M)]))}]).
+		        [{200, {call, ?MODULE, dequeue, [M]}} || boundary(M)]))}]).
 		        
 
 g_model() ->
@@ -43,6 +43,19 @@ prop_termination() ->
     		true
     	end).
 
+%% If the queue is empty, we are never in a dropping state
+prop_empty_q_no_drop() ->
+    ?FORALL(M, g_model(),
+        begin
+            #model { t = T, st = ST} = eval(M),
+            case sv_codel:dequeue(T+1, ST) of
+                {empty, _Dropped, EmptyState} ->
+                    PL = sv_codel:qstate(EmptyState),
+                    not proplists:get_value(dropping, PL);
+                {ok, _Pkt, _Dropped, _SomeState} ->
+                    true
+            end
+        end).
 
 %% Operations
 %% ----------------------------------------------
