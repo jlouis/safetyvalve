@@ -39,19 +39,20 @@ prop_termination() ->
     		true
     	end).
 
-%% If the queue is empty, we are never in a dropping state
-prop_empty_q_no_drop() ->
+%% Various observations on a CoDel queue
+prop_observations() ->
     ?FORALL(M, g_model(),
 	begin
             #model { t = T, st = ST} = eval(M),
             case sv_codel:dequeue(T+1, ST) of
                 {empty, _Dropped, EmptyState} ->
+                    %% Empty queues are never dropping and they reset first-above-time
                     PL = sv_codel:qstate(EmptyState),
                     (not proplists:get_value(dropping, PL))
                       andalso proplists:get_value(first_above_time, PL) == 0;
                 {ok, _Pkt, [_ | _], CoDelState} ->
-                    PL = sv_codel:qstate(CoDelState),
                     %% We dropped packets, our state must be dropping
+                    PL = sv_codel:qstate(CoDelState),
                     proplists:get_value(dropping, PL);
                 {ok, _Pkt, _Dropped, _SomeState} ->
                     true
