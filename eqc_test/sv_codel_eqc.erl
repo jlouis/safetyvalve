@@ -11,7 +11,7 @@ g_cmd_advance_time(M) ->
     {call, ?MODULE, advance_time, [M, g_time_advance()]}.
 
 g_time_advance() ->
-    choose(1, 10).
+    choose(1, 1000).
     
 g_model(0, todo) ->
 	oneof([{call, ?MODULE, new, []}]);
