@@ -7,6 +7,10 @@
 -record(model,
     { t = 0, st }).
 
+g_sv_codel_args() ->
+    ?LET(T, choose(5, 50),
+       [T, choose(T, 200)]).
+
 g_cmd_advance_time(M) ->
     {call, ?MODULE, advance_time, [M, g_time_advance()]}.
 
@@ -14,7 +18,7 @@ g_time_advance() ->
     choose(1, 1000).
     
 g_model(0, todo) ->
-	oneof([{call, ?MODULE, new, []}]);
+	oneof([{call, ?MODULE, new, g_sv_codel_args()}]);
 g_model(N, todo) ->
 	frequency([
 		{1, g_model(0, todo)},
@@ -62,8 +66,8 @@ prop_observations() ->
 %% Operations
 %% ----------------------------------------------
 
-new() ->
-	#model { t = 0, st = sv_codel:init() }.
+new(Target, Interval) ->
+	#model { t = 0, st = sv_codel:init(Target, Interval) }.
 
 advance_time(#model { t = T } = State, K) ->
     State#model { t = T + K  }.

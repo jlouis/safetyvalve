@@ -5,7 +5,7 @@
 %%% @end
 -module(sv_codel).
 
--export([init/0, enqueue/3, dequeue/2]).
+-export([init/2, enqueue/3, dequeue/2]).
 
 %% Scrutiny
 -export([qstate/1]).
@@ -37,7 +37,7 @@ qstate(#state {
      {first_above_time, FAT},
      {count, C}].
 
-init() -> #state{}.
+init(Target, Interval) -> #state{ target = Target, interval = Interval }.
 
 enqueue(Pkt, TS, #state { queue = Q } = State) ->
   State#state { queue = queue:in({Pkt, TS}, Q) }.
