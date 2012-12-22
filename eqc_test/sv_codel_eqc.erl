@@ -51,10 +51,10 @@ prop_observations() ->
             case sv_codel:dequeue(T+1, ST) of
                 {empty, _Dropped, EmptyState} ->
                     verify_empty(EmptyState);
-                {ok, _Pkt, [_ | _], CoDelState} ->
+                {_Pkt, [_ | _], CoDelState} ->
                     verify_dropped(CoDelState);
-                {ok, _Pkt, _Dropped, _SomeState} ->
-                    classify(true, normal_operation, true)
+                {_Pkt, _Dropped, _SomeState} ->
+                    classify(true, dequeue, true)
              end
         	end).
 
