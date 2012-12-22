@@ -52,25 +52,24 @@ enqueue(Pkt, TS, #state { queue = Q } = State) ->
 control_law(T, I, C) ->
   T + I / math:sqrt(C).
 
-dodequeue(Now, #state {
-	queue = Q,
-	target = Target,
-	first_above_time = FirstAbove,
-	interval = Interval } = State) ->
+dodequeue(Now, #state { queue = Q } = State) ->
   case queue:out(Q) of
     {empty, NQ} ->
       {nodrop, empty, State#state { first_above_time = 0, queue = NQ }};
     {{value, {Pkt, InT}}, NQ} ->
-      case Now - InT of
-        Sojourn when Sojourn < Target ->
-          {nodrop, Pkt, State#state { first_above_time = 0, queue = NQ }};
-        _Sojourn when FirstAbove == 0 ->
-          {nodrop, Pkt, State#state { first_above_time = Now + Interval, queue = NQ}};
-        _Sojourn when Now >= FirstAbove ->
-          {drop, Pkt, State#state { queue = NQ }};
-        _Sojourn -> {nodrop, Pkt, State#state{ queue = NQ}}
-      end
+      Sojourn = Now - InT,
+      
+      dodequeue_(Now, Pkt, Sojourn, State#state { queue = NQ })
   end.
+  
+dodequeue_(_Now, Pkt, Sojourn, #state { target = T } = State) when Sojourn < T ->
+    {nodrop, Pkt, State#state { first_above_time = 0 }};
+dodequeue_(Now, Pkt, _Sojourn, #state { first_above_time = FAT, interval = I } = State) when FAT == 0 ->
+    {nodrop, Pkt, State#state { first_above_time = Now + I }};
+dodequeue_(Now, Pkt, _Sojourn, #state { first_above_time = FAT } = State) when Now >= FAT ->
+    {drop, Pkt, State};
+dodequeue_(_Now, Pkt, _Sojourn, State) ->
+    {nodrop, Pkt, State}.
 
 dequeue(Now, #state { dropping = Dropping } = State) ->
   case dodequeue(Now, State) of
