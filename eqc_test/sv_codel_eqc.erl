@@ -5,7 +5,7 @@
 -include_lib("eqc/include/eqc.hrl").
 
 -record(model,
-    { t = 0, st }).
+    { t = 30000, st }).
 
 g_sv_codel_args() ->
     ?LET(T, choose(5, 50),
