@@ -50,18 +50,27 @@ prop_observations() ->
             #model { t = T, st = ST} = eval(M),
             case sv_codel:dequeue(T+1, ST) of
                 {empty, _Dropped, EmptyState} ->
-                    %% Empty queues are never dropping and they reset first-above-time
-                    PL = sv_codel:qstate(EmptyState),
-                    (not proplists:get_value(dropping, PL))
-                      andalso proplists:get_value(first_above_time, PL) == 0;
+                    verify_empty(EmptyState);
                 {ok, _Pkt, [_ | _], CoDelState} ->
-                    %% We dropped packets, our state must be dropping
-                    PL = sv_codel:qstate(CoDelState),
-                    proplists:get_value(dropping, PL);
+                    verify_dropped(CoDelState);
                 {ok, _Pkt, _Dropped, _SomeState} ->
-                    true
+                    classify(true, normal_operation, true)
              end
         	end).
+
+
+verify_dropped(CoDelState) ->
+    %% We dropped packets, our state must be dropping
+    PL = sv_codel:qstate(CoDelState),
+    classify(true, dropped,
+        proplists:get_value(dropping, PL)).
+
+verify_empty(EmptyState) ->
+    %% Empty queues are never dropping and they reset first-above-time
+    PL = sv_codel:qstate(EmptyState),
+    classify(true, empty_queue,
+                    (not proplists:get_value(dropping, PL))
+                      andalso proplists:get_value(first_above_time, PL) == 0).
 
 %% Operations
 %% ----------------------------------------------
