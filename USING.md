@@ -31,12 +31,12 @@ which executes QueryFun in the context of a Connection. We assume the pool has a
 The only thing you need to change in order to make safetyvalve used here, is that you need to start the safetyvalve application first. This can best be done in your applications `.app` file by having it as a dependency and then have a release which boots it. Safetyvalve will pick up the queue definition of `pg_q` and arrange to start up this queue for us. So we can use that queue:
 
 	run_query(QueryFun) ->
-	    case sv:run(fun() -> with_pg(QueryFun) end) of
+	    case sv:run(pg_q, fun() -> with_pg(QueryFun) end) of
 	      {ok, Res} -> {ok, Res};
 	      {error, Reason} -> {error, Reason}
 	    end.
 	 
-If we get to run, we will return `{ok, Res}` where Res is the result from the query. If it fails, what will be returned is `{error, Reason}`. The usual `Reason` is the atom `queue_full` which will tell you that there are 32 working on the database and that there are 30 in queue to work. This is where we will reject the job.
+If we get to run, we will return `{ok, Res}` where Res is the result from the query. If it fails, what will be returned is `{error, Reason}`. The usual `Reason` is the atom `queue_full` which will tell you that there are 32 working on the database and that there are 30 in queue to work. This is where we will reject the job. Note the mention of `pg_q` in there which designates what queue to use. We can have multiple such queues if we have more than a single class of processes.
 
 What to do when a job is rejected is up to you. Either you can reject the job upwards. If you are using this to limit certain in-bound HTTP requests, you can return a 503 to designtate to the caller we have overload. Or you can wait for some time and try again and retry. Whenever you retry, you can increase a backoff. For real-time queries, it is usually best to reject and fail the request quickly. A user is usually not going to wait. For a batch-job, it is usually better to wait and try again.
 
