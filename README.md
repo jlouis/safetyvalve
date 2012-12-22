@@ -14,6 +14,8 @@ This project uses semantic versioning. Tags are declared like `vX.Y.Z`
 * Y changes: These are additions to the API, but existing functionality has not been broken.
 * Z changes: Bug fixes.
 
+See the document USING.md for a usage example.
+
 # Changes
 
 ### v0.1.0 -> v1.0.0
