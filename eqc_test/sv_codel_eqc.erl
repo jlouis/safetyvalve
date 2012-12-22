@@ -24,9 +24,9 @@ g_model(N, todo) ->
 		{1, g_model(0, todo)},
 		{N, ?LET(M, g_model(max(0, N-2), todo),
 		    frequency(
-		        [{400, g_cmd_advance_time(M)}] ++
+		        [{100, g_cmd_advance_time(M)}] ++
 		        [{100, {call, ?MODULE, enqueue, [M]}}] ++
-		        [{200, {call, ?MODULE, dequeue, [M]}}]))}]).
+		        [{100, {call, ?MODULE, dequeue, [M]}}]))}]).
 		        
 
 g_model() ->
