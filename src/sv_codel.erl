@@ -1,7 +1,13 @@
 %%% @doc This is a loose translation of the following link from ACM:
 %%% http://queue.acm.org/appendices/codel.html
+%%% http://pollere.net/CoDelnotes.html
+%%% http://pollere.net/CoDel.html
+%%%
 %%% The document you want to read is
 %%% "Controlling queue Delay" Kathleen Nichols, Van Jacobson, http://queue.acm.org/detail.cfm?id=2209336
+%%% But also note that some of the other papers are interesting. Especially Kathie Nichols notes are of
+%%% interest.
+%%%
 %%% @end
 -module(sv_codel).
 
