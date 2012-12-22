@@ -53,6 +53,8 @@ prop_observations() ->
                     verify_empty(EmptyState);
                 {_Pkt, [_ | _], CoDelState} ->
                     verify_dropped(CoDelState);
+                {drop, [_Pkt], CoDelState} ->
+                    classify(true, start_drop, true);
                 {_Pkt, _Dropped, _SomeState} ->
                     classify(true, dequeue, true)
              end
