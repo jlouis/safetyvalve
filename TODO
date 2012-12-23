@@ -1,4 +1,7 @@
 GH/jlouis/safetyvalve
 
+http://queue.acm.org/appendices/codel.html
+
+· EQC CoDel test: Add classification to prop_empty_q_no_drop
 · EQC CoDel test: Vary Target and Interval :)
 · EQC CoDel test: Think about what properties to add.
