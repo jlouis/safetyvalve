@@ -36,7 +36,7 @@ g_model() ->
 %% ----------------------------------------------
 
 %% Verify that the queue runs if we blindly execute it
-prop_termination() ->
+xprop_termination() ->
     ?FORALL(M, g_model(),
     	begin
     		_R = eval(M),
@@ -51,10 +51,10 @@ prop_observations() ->
             case sv_codel:dequeue(T+1, ST) of
                 {empty, _Dropped, EmptyState} ->
                     verify_empty(EmptyState);
-                {_Pkt, [_ | _], CoDelState} ->
-                    verify_dropped(CoDelState);
                 {drop, [_Pkt], _CoDelState} ->
                     classify(true, start_drop, true);
+                {_Pkt, [_ | _], CoDelState} ->
+                    verify_dropped(CoDelState);
                 {_Pkt, _Dropped, _SomeState} ->
                     classify(true, dequeue, true)
              end
@@ -65,14 +65,28 @@ verify_dropped(CoDelState) ->
     %% We dropped packets, our state must be dropping
     PL = sv_codel:qstate(CoDelState),
     classify(true, dropped,
-        proplists:get_value(dropping, PL)).
+        case proplists:get_value(dropping, PL) of
+          true -> true;
+          false ->
+            case queue:is_empty(proplists:get_value(queue, PL)) of
+              true -> true;
+              false -> {error, {no_drop, PL}}
+            end
+        end).
 
 verify_empty(EmptyState) ->
     %% Empty queues are never dropping and they reset first-above-time
     PL = sv_codel:qstate(EmptyState),
     classify(true, empty_queue,
-                    (not proplists:get_value(dropping, PL))
-                      andalso proplists:get_value(first_above_time, PL) == 0).
+        case proplists:get_value(dropping, PL) of
+            false ->
+                case proplists:get_value(first_above_time, PL) of
+                   0 -> true;
+                   K -> {error, {fat_not_zero, K, PL}}
+                 end;
+            true ->
+                {error, {empty_and_dropping, PL}}
+        end).
 
 %% Operations
 %% ----------------------------------------------
