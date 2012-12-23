@@ -1,7 +1,7 @@
 -module(sv).
 
 -export([timestamp/0]).
--export([run/2, run/3]).
+-export([run/2]).
 
 %% @doc Enqueue a job on a queue
 %% <p>Try to run `Fun' on queue `Name'. The `Fun' is run at time `TP'.
@@ -11,27 +11,24 @@
 %% function will return either the result of `Fun' or an `{error,
 %% Reason}' error term, describing the overload situation encountered.</p>
 %% @end
--spec run(Name, TS, Fun) -> {ok, Result} | {error, Reason}
+
+-spec run(Name, Fun) -> {ok, Result} | {error, Reason}
     when
       Name :: atom(),
-      TS :: term(), % Timestamp, should be orderable and unique
       Fun :: fun (() -> term),
       Result :: term(),
       Reason :: term().
-run(Name, TimePoint, Fun) ->
-    case sv_queue:ask(Name, TimePoint) of
+run(Name, Fun) ->
+    StartPoint = timestamp(),
+    case sv_queue:ask(Name, StartPoint) of
         {go, Ref} ->
             Res = Fun(),
-            sv_queue:done(Name, Ref),
+            EndPoint = timestamp(), 
+            sv_queue:done(Name, Ref, EndPoint),
             {ok, Res};
         {error, Reason} ->
             {error, Reason}
     end.
-
-%% @doc A variant where the time is injected automatically
-%% @end
-run(Name, Fun) ->
-	run(Name, timestamp(), Fun).
 
 %% @doc Construct a timestamp in a canonical way for Safetyvalve.
 -spec timestamp() -> term().
@@ -39,5 +36,6 @@ timestamp() ->
 	%% Timestamps *have* to be unique. Calling erlang:now/0 makes sure
 	%% this happens. But you can use any ordered term if you want, for instance
 	%% {os:timestamp(), self()} or {os:timestamp(), ref()}.
-	erlang:now().
+	{Mega, Secs, Micro} = erlang:now(),
+	(Mega * 1000000 + Secs) * 1000000 + Micro.
 

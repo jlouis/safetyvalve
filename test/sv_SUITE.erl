@@ -62,18 +62,24 @@ through(_Config) ->
 many_through(_Config) ->
     Parent = self(),
     Pids = [spawn_link(fun() ->
-                               {ok, ok} = sv:run(test_queue_1, fun work/0),
-                               Parent ! {done, self()}
-                       end) || _ <- lists:seq(1, 20)],
-    ok = collect(Pids).
+    	case sv:run(test_queue_1, fun work/0) of
+    	    {ok, ok} -> Parent ! {done, self()};
+    	    {error, overload} -> Parent ! {overload, self()}
+    	end
+      end) || _ <- lists:seq(1, 20)],
+    {ok, Overloads} = collect(Pids, 0),
+    ct:log("Overloads: ~B", [Overloads]),
+    true = Overloads > 0.
 
 %% ----------------------------------------------------------------------
-collect([]) ->
-    ok;
-collect(Pids) when is_list(Pids) ->
+collect([], Overloads) ->
+    {ok, Overloads};
+collect(Pids, Overloads) when is_list(Pids) ->
     receive
         {done, Pid} ->
-            collect(Pids -- [Pid])
+            collect(Pids -- [Pid], Overloads);
+        {overload, Pid} ->
+            collect(Pids -- [Pid], Overloads + 1)
     after 5000 ->
             {error, timeout}
     end.

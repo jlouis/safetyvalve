@@ -12,6 +12,7 @@
 -module(sv_codel).
 
 %% Public API
+-export([new/0, in/3, out/2, len/1]).
 -export([init/2, enqueue/3, dequeue/2]).
 
 %% Scrutiny
@@ -19,12 +20,14 @@
 
 -type task() :: term().
 
+-define(Q, sv_queue_ets).
+
 %% Internal state
 -record(state, {
     %% The underlying queue to use. For now, since we are mainly in a test phase, we just use a standard
     %% functional queue. But later the plan is to use a module here and then call the right kind of queue
     %% functions for that module.
-    queue = queue:new(),
+    queue = ?Q:new(),
     
     %% The `dropping' field tracks if the CoDel system is in a dropping state or not.
     dropping = false,
@@ -67,6 +70,19 @@ qstate(#state {
      {first_above_time, FAT},
      {count, C}].
 
+%% Queue API
+%% -----------------------------
+new() ->
+  init(5*1000, 100*1000).
+  
+len(#state { queue = Q }) -> ?Q:len(Q).
+
+in(Item, Ts, CoDelState) ->
+    enqueue(Item, Ts, CoDelState).
+    
+out(Ts, CoDelState) ->
+   dequeue(Ts, CoDelState).
+
 %% @doc Initialize the CoDel state
 %% <p>The value `Target' defines the delay target in ms. If the queue has a sojourn-time through the queue
 %% which is above this value, then the queue begins to consider dropping packets.</p>
@@ -87,7 +103,7 @@ init(Target, Interval) -> #state{ target = Target, interval = Interval }.
 %% @end
 -spec enqueue(task(), term(), #state{}) -> #state{}.
 enqueue(Pkt, TS, #state { queue = Q } = State) ->
-  State#state { queue = queue:in({Pkt, TS}, Q) }.
+  State#state { queue = ?Q:in({Pkt, TS}, TS, Q) }.
 
 %% @doc Dequeue a packet from the CoDel system
 %% Given a point in time, `Now' and a CoDel `State', extract the next task from it.
@@ -114,10 +130,10 @@ control_law(T, I, C) ->
 %% This is a helper function. It dequeues from the underlying queue and then analyzes the Sojourn
 %% time together with the next function, dodequeue_.
 dodequeue(Now, #state { queue = Q } = State) ->
-  case queue:out(Q) of
-    {empty, NQ} ->
+  case ?Q:out(Now, Q) of
+    {empty, [], NQ} ->
       {nodrop, empty, State#state { first_above_time = 0, queue = NQ }};
-    {{value, {Pkt, InT}}, NQ} ->
+    {{Pkt, InT}, [], NQ} ->
       Sojourn = Now - InT,
       
       dodequeue_(Now, Pkt, Sojourn, State#state { queue = NQ })

@@ -29,13 +29,13 @@
 
 -export([parse_configuration/1]).
 
--export([replenish/1, ask/1, ask/2, done/2, q/2]).
+-export([replenish/1, ask/1, ask/2, done/3, q/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE). 
--define(QUEUE, sv_queue_ets).
+-define(QUEUE, sv_codel).
 
 -record(conf, { hz, rate, token_limit, size, concurrency }).
 -record(state, {
@@ -84,8 +84,8 @@ ask(Name, Timestamp) ->
     gen_server:call(Name, {ask, Timestamp}, infinity).
 
 
-done(Name, Ref) ->
-    gen_server:call(Name, {done, Ref}, infinity).
+done(Name, Ref, Timestamp) ->
+    gen_server:call(Name, {done, Timestamp, Ref}, infinity).
 
 replenish(Name) ->
     Name ! replenish.
@@ -138,11 +138,12 @@ handle_call({ask, Timestamp}, From,
         queue_full ->
             {reply, {error, queue_full}, State}
     end;
-handle_call({done, Ref}, _From, #state { tasks = Tasks } = State) ->
+handle_call({done, Now, Ref}, _From, #state { tasks = Tasks } = State) ->
     true = erlang:demonitor(Ref),
     NewState = State#state { tasks = gb_sets:del_element(Ref, Tasks) },
-    {reply, ok, process_queue(NewState) };
-handle_call(_Request, _From, State) ->
+    {reply, ok, process_queue(Now, NewState) };
+handle_call(Request, _From, State) ->
+    lager:error("Unknown call request: ~p", [Request]),
     Reply = ok,
     {reply, Reply, State}.
 
@@ -152,10 +153,15 @@ handle_cast(_Msg, State) ->
 
 %% @private
 handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
-    NewState = process_queue(State#state { tasks = gb_sets:del_element(Ref, TS) }),
+    Now = sv:timestamp(),
+    NewState = process_queue(Now, State#state { tasks = gb_sets:del_element(Ref, TS) }),
+    {noreply, NewState};
+handle_info({replenish, TS}, State) ->
+    NewState = process_queue(TS, refill_tokens(State)),
     {noreply, NewState};
 handle_info(replenish, #state { conf = C } = State) ->
-    NewState = process_queue(refill_tokens(State)),
+    Now = sv:timestamp(),
+    NewState = process_queue(Now, refill_tokens(State)),
     set_timer(C),
     {noreply, NewState};
 handle_info(_Info, State) ->
@@ -173,35 +179,40 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% @doc Try to use up tokens for queued items
 %% @end
-process_queue(#state { queue = Q, tokens = K, tasks = Ts, conf = Conf } = State) ->
+process_queue(Now, #state { queue = Q, tokens = K, tasks = Ts, conf = Conf } = State) ->
     case analyze_tasks(Ts, Conf) of
         concurrency_full ->
             State;
         {go, RemainingConc} ->
             ToStart = min(RemainingConc, K),
-            {Started, NQ, NTs} = process_queue(ToStart, Q, Ts),
+            {Started, NQ, NTs} = process_queue(Now, ToStart, Q, Ts),
             State#state { queue = NQ, tokens = K - Started, tasks = NTs }
     end.
 
-process_queue(Rem, Q, TS) ->
-    process_queue(Rem, Q, TS, 0).
+process_queue(Now, Rem, Q, TS) ->
+    process_queue(Now, Rem, Q, TS, 0).
 
-process_queue(0, Q, TS, Started) ->
+process_queue(_Now, 0, Q, TS, Started) ->
     {Started, Q, TS};
-process_queue(K, Q, TS, Started) ->
-    case ?QUEUE:out(Q) of
-        {{value, {_Timestamp, {Pid, _} = From}}, Q2} ->
+process_queue(Now, K, Q, TS, Started) ->
+    case ?QUEUE:out(Now, Q) of
+        {drop, Dropped, Q2} ->
+            drop(Dropped),
+            process_queue(Now, K, Q2, TS, Started);
+        {{Pid, _} = From, Dropped, Q2} ->
+            drop(Dropped),
             Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
-            process_queue(K-1, Q2, gb_sets:add_element(Ref, TS), Started+1);
-        {empty, Q2} ->
+            process_queue(Now, K-1, Q2, gb_sets:add_element(Ref, TS), Started+1);
+        {empty, Dropped, Q2} ->
+            drop(Dropped),
             {Started, Q2, TS}
     end.
 
 enqueue(Term, Timestamp, Q, #conf { size = Sz } ) ->
     case ?QUEUE:len(Q) of
         K when K < Sz ->
-            {ok, ?QUEUE:in({Timestamp, Term}, Q)};
+            {ok, ?QUEUE:in(Term, Timestamp, Q)};
         K when K == Sz ->
             queue_full
     end.
@@ -226,3 +237,7 @@ refill_tokens(#state { tokens = K,
 set_timer(#conf { hz = undefined }) -> ok;
 set_timer(#conf { hz = Hz }) ->
     erlang:send_after(Hz, self(), replenish).
+
+drop(Tasks) ->
+    [gen_server:reply(F, {error, overload}) || F <- Tasks],
+    ok.
