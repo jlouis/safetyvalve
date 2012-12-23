@@ -11,12 +11,19 @@
 %% function will return either the result of `Fun' or an `{error,
 %% Reason}' error term, describing the overload situation encountered.</p>
 %% @end
+-spec run(Name, TS, Fun) -> {ok, Result} | {error, Reason}
+    when
+      Name :: atom(),
+      TS :: term(), % Timestamp, should be orderable and unique
+      Fun :: fun (() -> term),
+      Result :: term(),
+      Reason :: term().
 run(Name, TimePoint, Fun) ->
     case sv_queue:ask(Name, TimePoint) of
         {go, Ref} ->
             Res = Fun(),
             sv_queue:done(Name, Ref),
-            Res;
+            {ok, Res};
         {error, Reason} ->
             {error, Reason}
     end.
@@ -27,6 +34,7 @@ run(Name, Fun) ->
 	run(Name, timestamp(), Fun).
 
 %% @doc Construct a timestamp in a canonical way for Safetyvalve.
+-spec timestamp() -> term().
 timestamp() ->
 	%% Timestamps *have* to be unique. Calling erlang:now/0 makes sure
 	%% this happens. But you can use any ordered term if you want, for instance

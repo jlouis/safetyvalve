@@ -14,7 +14,7 @@ do_work(TimePoint) ->
                 fun () ->
                             done = manager:doing_work()
                 end) of
-        done -> manager:status(done);
+        {ok, done} -> manager:status(done);
         {error, _Reason} = Err -> manager:status(Err)
     end.
 
