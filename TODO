@@ -1,7 +1,9 @@
 GH/jlouis/safetyvalve
 
-http://queue.acm.org/appendices/codel.html
-
-· EQC CoDel test: Add classification to prop_empty_q_no_drop
-· EQC CoDel test: Vary Target and Interval :)
-· EQC CoDel test: Think about what properties to add.
+· Make the queue type modular in sv_queue.
+  · Reinstate EQC test for sv_queue.
+  
+· Measure the CoDel stuff.
+  How do we measure this stuff? We add a tracer process and outputs data
+  to it. Then we pick up the traces and log it to a file so we can track it later.
+  We then output into R and plot the measurement.
