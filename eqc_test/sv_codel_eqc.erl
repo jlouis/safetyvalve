@@ -16,21 +16,25 @@ g_cmd_advance_time(M) ->
 
 g_time_advance() ->
     choose(1, 1000).
-    
-g_model(0, todo) ->
+   
+
+g_model(0) ->
 	oneof([{call, ?MODULE, new, g_sv_codel_args()}]);
-g_model(N, todo) ->
+g_model(N) ->
 	frequency([
-		{1, g_model(0, todo)},
-		{N, ?LET(M, g_model(max(0, N-2), todo),
-		    frequency(
-		        [{100, g_cmd_advance_time(M)}] ++
-		        [{100, {call, ?MODULE, enqueue, [M]}}] ++
-		        [{100, {call, ?MODULE, dequeue, [M]}}]))}]).
-		        
+		{1, g_model(0)},
+		{N,
+		 ?LAZY(?LETSHRINK([M], [g_model(N-1)],
+		     g_cmd_advance_time(M)))},
+		{N,
+		 ?LAZY(?LETSHRINK([M], [g_model(N-1)],
+		     {call, ?MODULE, enqueue, [M]}))},
+		{N,
+		 ?LAZY(?LETSHRINK([M], [g_model(N-1)],
+		     {call, ?MODULE, dequeue, [M]}))}]).
 
 g_model() ->
-    ?SIZED(Size, g_model(Size, todo)).
+    ?SIZED(Size, g_model(Size)).
 
 %% Properties
 %% ----------------------------------------------
@@ -64,15 +68,7 @@ prop_observations() ->
 verify_dropped(CoDelState) ->
     %% We dropped packets, our state must be dropping
     PL = sv_codel:qstate(CoDelState),
-    classify(true, dropped,
-        case proplists:get_value(dropping, PL) of
-          true -> true;
-          false ->
-            case queue:is_empty(proplists:get_value(queue, PL)) of
-              true -> true;
-              false -> {error, {no_drop, PL}}
-            end
-        end).
+    classify(true, dropped, true).
 
 verify_empty(EmptyState) ->
     %% Empty queues are never dropping and they reset first-above-time
