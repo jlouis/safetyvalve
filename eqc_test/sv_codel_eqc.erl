@@ -53,7 +53,7 @@ prop_observations() ->
                     verify_empty(EmptyState);
                 {_Pkt, [_ | _], CoDelState} ->
                     verify_dropped(CoDelState);
-                {drop, [_Pkt], CoDelState} ->
+                {drop, [_Pkt], _CoDelState} ->
                     classify(true, start_drop, true);
                 {_Pkt, _Dropped, _SomeState} ->
                     classify(true, dequeue, true)
@@ -89,7 +89,6 @@ enqueue(#model { t = T, st = ST } = State) ->
 dequeue(#model { t = T, st = ST } = State) ->
     ST2 =
     	case sv_codel:dequeue(T, ST) of
-    		{ok, _, _, S} -> S;
-    		{empty, _, S} -> S
+    	    {_, _, S} -> S
     	end,
     State#model { t = T+1, st = ST2 }.
