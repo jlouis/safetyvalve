@@ -72,24 +72,34 @@ through(_Config) ->
 
 many_through_ets(_Config) ->
     Parent = self(),
-    Pids = [spawn_link(fun() ->
-    	case sv:run(test_queue_1_ets, fun work/0) of
-    	    {ok, ok} -> Parent ! {done, self()};
-    	    {error, overload} -> Parent ! {overload, self()}
-    	end
-      end) || _ <- lists:seq(1, 60)],
+    Pids = [
+      begin
+        Pid = spawn_link(fun() ->
+    	  case sv:run(test_queue_1_ets, fun work/0) of
+    	      {ok, ok} -> Parent ! {done, self()};
+    	      {error, overload} -> Parent ! {overload, self()}
+    	  end
+        end),
+        timer:sleep(20),
+        Pid
+      end || _ <- lists:seq(1, 60)],
     {ok, Overloads} = collect(Pids, 0),
     ct:log("Overloads: ~B", [Overloads]),
     true = Overloads == 0.
 
 many_through_codel(_Config) ->
     Parent = self(),
-    Pids = [spawn_link(fun() ->
-        case sv:run(test_queue_1_codel, fun work/0) of
-            {ok, ok} -> Parent ! {done, self()};
-            {error, overload} -> Parent ! {overload, self()}
-        end
-      end) || _ <- lists:seq(1, 60)],
+    Pids = [
+      begin
+        Pid = spawn_link(fun() ->
+          case sv:run(test_queue_1_codel, fun work/0) of
+              {ok, ok} -> Parent ! {done, self()};
+              {error, overload} -> Parent ! {overload, self()}
+          end
+        end),
+        timer:sleep(20),
+        Pid
+      end || _ <- lists:seq(1, 60)],
     {ok, Overloads} = collect(Pids, 0),
     ct:log("Overloads: ~B", [Overloads]),
     true = Overloads > 0.
@@ -104,7 +114,7 @@ collect(Pids, Overloads) when is_list(Pids) ->
         {overload, Pid} ->
             collect(Pids -- [Pid], Overloads + 1)
     after 5000 ->
-            {error, timeout}
+            {error, {timeout, Pids, Overloads}}
     end.
 
     

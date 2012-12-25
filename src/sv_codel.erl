@@ -73,7 +73,7 @@ qstate(#state {
 %% Queue API
 %% -----------------------------
 new() ->
-  init(5*1000, 100*1000).
+  init(50*1000, 500*1000).
   
 len(#state { queue = Q }) -> ?Q:len(Q).
 
