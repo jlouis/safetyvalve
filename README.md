@@ -18,6 +18,14 @@ See the document USING.md for a usage example.
 
 # Changes
 
+### v2.0.0 -> v2.1.0
+
+Enable a new configuration parameter, `queue_type`. This parameter defines a module which handles the queueing strategy used by the system. In short, queues are now plugable. If omitted, the queue defaults to `sv_queue_ets` which is an ETS-based queueing strategy. Hence, the minor version bump as it should not affect any users and be fully backwards compatible.
+
+### v1.0.0 -> v2.0.0
+
+Remove `sv:run/3` and replace it with `sv:run/2` for now. The return value is still changed according to the changes in v1.0.0. This change is done to hide certain internal structure for now until we get it fleshed out more. It also enables us to do more advanced queueing strategies.
+
 ### v0.1.0 -> v1.0.0
 
 The return value of `sv:run/3` changed from `Res | {error, Reason}` to `{ok, Res} | {error, Reason}`. This better reflects the system and we can distinguish between an error term from the function we run and safetyvalve itself.
@@ -68,14 +76,21 @@ Where each `QDef` is a queue definition of a queue. For now all queues
 are Token Bucket Regulators with a rate limit and a poll frequency:
 
 ```
-QDef = {my_queue, [{hz, 1000}, % Poll the queue every 1000 ms
+QDef = {my_queue, [{queue_type, sv_queue_ets},
+                   {hz, 1000}, % Poll the queue every 1000 ms
                    {rate, 5},  % Produce 5 requests per poll
                    {token_limit, 15}, % Allow a 15 token burst
                    {size, 60}, % Keep at most 60 tasks waiting
                    {concurrency, 3}]} % Start at most 3 jobs simultaneously
 ```
 
-The configuration will tell the queue to poll once every 1000ms via
+The most important flag is the `queue_type` which sets up what type of queue
+we want to run. Currently, you can pick among the following:
+
+* `sv_queue_ets` - An ETS based queue. Jobs are stored in an `ordered_set` ETS table as `{Timestamp, Job}` and are picked by calling `ets:first/1`.
+* `sv_codel` - A CoDel classifier (Controlled Delay - pronounced 'coddle'). CoDel is a *parameterless*, *burst permitting* delay controller. the CoDel algorithm targets a given wanted latency for a job in queue and begins rejecting jobs if that latency is not met. Also, it has hysteresis-like capabilities which allows the algorithm to handle sudden bursts of traffic. **CoDel is currently experimental**.
+
+The rest of the configuration will tell the queue to poll once every 1000ms via
 the `hz` value. Setting this value lower makes the queue reconsider
 its tokens more often, with a less jagged performance as a result.
 Setting this value too low may however make your Erlang VM spend a
