@@ -35,9 +35,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE). 
--define(QUEUE, sv_codel).
 
--record(conf, { hz, rate, token_limit, size, concurrency }).
+-record(conf, { hz, rate, token_limit, size, concurrency, queue_type }).
 -record(state, {
           %% Conf is the configuration object this queue is configured
           %% with. It is a place to query about conf options
@@ -74,7 +73,8 @@ parse_configuration(Conf) ->
       rate = proplists:get_value(rate, Conf),
       token_limit = proplists:get_value(token_limit, Conf),
       size = proplists:get_value(size, Conf),
-      concurrency = proplists:get_value(concurrency, Conf)
+      concurrency = proplists:get_value(concurrency, Conf),
+      queue_type = proplists:get_value(queue_type, Conf, sv_queue_ets)
     }.
 
 ask(Name) ->
@@ -98,8 +98,9 @@ q(Name, Atom) ->
 %% @private
 init([Conf]) ->
     set_timer(Conf),
+    QT = Conf#conf.queue_type,
     {ok, #state{ conf = Conf,
-                 queue = ?QUEUE:new(),
+                 queue = QT:new(),
                  tokens = min(Conf#conf.rate, Conf#conf.token_limit),
                  tasks = gb_sets:empty() }}.
 
@@ -185,34 +186,35 @@ process_queue(Now, #state { queue = Q, tokens = K, tasks = Ts, conf = Conf } = S
             State;
         {go, RemainingConc} ->
             ToStart = min(RemainingConc, K),
-            {Started, NQ, NTs} = process_queue(Now, ToStart, Q, Ts),
+            QT = Conf#conf.queue_type,
+            {Started, NQ, NTs} = process_queue(Now, ToStart, Q, QT, Ts),
             State#state { queue = NQ, tokens = K - Started, tasks = NTs }
     end.
 
-process_queue(Now, Rem, Q, TS) ->
-    process_queue(Now, Rem, Q, TS, 0).
+process_queue(Now, Rem, Q, QT, TS) ->
+    process_queue(Now, Rem, Q, QT, TS, 0).
 
-process_queue(_Now, 0, Q, TS, Started) ->
+process_queue(_Now, 0, Q, _QT, TS, Started) ->
     {Started, Q, TS};
-process_queue(Now, K, Q, TS, Started) ->
-    case ?QUEUE:out(Now, Q) of
+process_queue(Now, K, Q, QT, TS, Started) ->
+    case QT:out(Now, Q) of
         {drop, Dropped, Q2} ->
             drop(Dropped),
-            process_queue(Now, K, Q2, TS, Started);
+            process_queue(Now, K, Q2, QT, TS, Started);
         {{Pid, _} = From, Dropped, Q2} ->
             drop(Dropped),
             Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
-            process_queue(Now, K-1, Q2, gb_sets:add_element(Ref, TS), Started+1);
+            process_queue(Now, K-1, Q2, QT, gb_sets:add_element(Ref, TS), Started+1);
         {empty, Dropped, Q2} ->
             drop(Dropped),
             {Started, Q2, TS}
     end.
 
-enqueue(Term, Timestamp, Q, #conf { size = Sz } ) ->
-    case ?QUEUE:len(Q) of
+enqueue(Term, Timestamp, Q, #conf { size = Sz, queue_type = QT } ) ->
+    case QT:len(Q) of
         K when K < Sz ->
-            {ok, ?QUEUE:in(Term, Timestamp, Q)};
+            {ok, QT:in(Term, Timestamp, Q)};
         K when K == Sz ->
             queue_full
     end.

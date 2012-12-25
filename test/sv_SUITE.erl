@@ -7,7 +7,7 @@
 	 init_per_suite/1, end_per_suite/1,
 	 init_per_testcase/2, end_per_testcase/2]).
 
--export([ping/1, through/1, many_through/1]).
+-export([ping/1, through/1, many_through_ets/1, many_through_codel/1]).
 
 suite() ->
     [{timetrap, {seconds, 30}}].
@@ -48,7 +48,12 @@ end_per_testcase(_Case, _Config) ->
 %% Tests
 %% ----------------------------------------------------------------------
 groups() ->
-    [{basic, [shuffle], [ping, through, many_through]}].
+    [{basic, [shuffle], [
+      many_through_codel,
+      many_through_ets,
+      ping,
+      through
+    ]}].
 
 all() ->
     [{group, basic}].
@@ -57,15 +62,27 @@ ping(_Config) ->
     ok.
 
 through(_Config) ->
-    {ok, ok} = sv:run(test_queue_1, fun work/0).
+    {ok, ok} = sv:run(test_queue_1_ets, fun work/0).
 
-many_through(_Config) ->
+many_through_ets(_Config) ->
     Parent = self(),
     Pids = [spawn_link(fun() ->
-    	case sv:run(test_queue_1, fun work/0) of
+    	case sv:run(test_queue_1_ets, fun work/0) of
     	    {ok, ok} -> Parent ! {done, self()};
     	    {error, overload} -> Parent ! {overload, self()}
     	end
+      end) || _ <- lists:seq(1, 20)],
+    {ok, Overloads} = collect(Pids, 0),
+    ct:log("Overloads: ~B", [Overloads]),
+    true = Overloads == 0.
+
+many_through_codel(_Config) ->
+    Parent = self(),
+    Pids = [spawn_link(fun() ->
+        case sv:run(test_queue_1_codel, fun work/0) of
+            {ok, ok} -> Parent ! {done, self()};
+            {error, overload} -> Parent ! {overload, self()}
+        end
       end) || _ <- lists:seq(1, 20)],
     {ok, Overloads} = collect(Pids, 0),
     ct:log("Overloads: ~B", [Overloads]),
