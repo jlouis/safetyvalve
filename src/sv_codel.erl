@@ -132,12 +132,12 @@ control_law(T, I, C) ->
 dodequeue(Now, #state { queue = Q } = State) ->
   case ?Q:out(Now, Q) of
     {empty, [], NQ} ->
-      sv:report(Now, {dodequeue, 0, 0}),
+      sv:report(Now div 1000, {dodequeue, 0, 0}),
       {nodrop, empty, State#state { first_above_time = 0, queue = NQ }};
     {{Pkt, InT}, [], NQ} ->
       Sojourn = Now - InT,
       
-      sv:report(Now, {dodequeue, ?Q:len(NQ), Sojourn / 1000}),
+      sv:report(Now div 1000, {dodequeue, ?Q:len(NQ), Sojourn div 1000}),
       dodequeue_(Now, Pkt, Sojourn, State#state { queue = NQ })
   end.
 

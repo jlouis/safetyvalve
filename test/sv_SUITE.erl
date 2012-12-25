@@ -30,6 +30,9 @@ end_per_suite(_Config) ->
         App <- lists:reverse([syntax_tools, compiler, lager, safetyvalve])],
     ok.
 
+init_per_testcase(many_through_codel, Config) ->
+    sv_tracer:start_link(filename:join(?config(priv_dir, Config), "trace.out")),
+    Config;
 init_per_testcase(not_applicable, Config) ->
     dbg:tracer(),
     dbg:tpl({sv_queue_ets, in, 2}, cx),
@@ -39,6 +42,9 @@ init_per_testcase(not_applicable, Config) ->
 init_per_testcase(_Case, Config) ->
     Config.
 
+end_per_testcase(many_through_codel, _Config) ->
+    sv_tracer:stop(),
+    ok;
 end_per_testcase(not_applicable, _Config) ->
     dbg:stop(),
     ok;
@@ -71,7 +77,7 @@ many_through_ets(_Config) ->
     	    {ok, ok} -> Parent ! {done, self()};
     	    {error, overload} -> Parent ! {overload, self()}
     	end
-      end) || _ <- lists:seq(1, 20)],
+      end) || _ <- lists:seq(1, 60)],
     {ok, Overloads} = collect(Pids, 0),
     ct:log("Overloads: ~B", [Overloads]),
     true = Overloads == 0.
@@ -83,7 +89,7 @@ many_through_codel(_Config) ->
             {ok, ok} -> Parent ! {done, self()};
             {error, overload} -> Parent ! {overload, self()}
         end
-      end) || _ <- lists:seq(1, 20)],
+      end) || _ <- lists:seq(1, 60)],
     {ok, Overloads} = collect(Pids, 0),
     ct:log("Overloads: ~B", [Overloads]),
     true = Overloads > 0.
