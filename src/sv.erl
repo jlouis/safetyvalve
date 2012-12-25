@@ -2,6 +2,8 @@
 
 -export([timestamp/0]).
 -export([run/2]).
+%% Internal API
+-export([report/2]).
 
 %% @doc Enqueue a job on a queue
 %% <p>Try to run `Fun' on queue `Name'. The `Fun' is run at time `TP'.
@@ -29,6 +31,10 @@ run(Name, Fun) ->
         {error, Reason} ->
             {error, Reason}
     end.
+
+%% @private
+report(_T, _Event) ->
+    hopefully_traced.
 
 %% @doc Construct a timestamp in a canonical way for Safetyvalve.
 -spec timestamp() -> term().
