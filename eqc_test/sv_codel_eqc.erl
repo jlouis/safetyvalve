@@ -44,6 +44,7 @@ xprop_termination() ->
     ?FORALL(M, g_model(),
     	begin
     		_R = eval(M),
+    		cleanup(M),
     		true
     	end).
 
@@ -51,8 +52,10 @@ xprop_termination() ->
 prop_observations() ->
     ?FORALL(M, g_model(),
 	begin
-            #model { t = T, st = ST} = eval(M),
-            case sv_codel:dequeue(T+1, ST) of
+            #model { t = T, st = ST} = Res = eval(M),
+            R = sv_codel:dequeue(T+1, ST),
+            cleanup(Res),
+            case R of
                 {empty, _Dropped, EmptyState} ->
                     verify_empty(EmptyState);
                 {drop, [_Pkt], _CoDelState} ->
@@ -67,7 +70,6 @@ prop_observations() ->
 
 verify_dropped(CoDelState) ->
     %% We dropped packets, our state must be dropping
-    PL = sv_codel:qstate(CoDelState),
     classify(true, dropped, true).
 
 verify_empty(EmptyState) ->
@@ -86,6 +88,9 @@ verify_empty(EmptyState) ->
 
 %% Operations
 %% ----------------------------------------------
+
+cleanup(#model { st = ST }) ->
+    sv_codel:delete(ST).
 
 new(Target, Interval) ->
 	#model { t = 0, st = sv_codel:init(Target, Interval) }.

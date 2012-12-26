@@ -13,7 +13,7 @@
 
 %% Public API
 -export([new/0, in/3, out/2, len/1]).
--export([init/2, enqueue/3, dequeue/2]).
+-export([init/2, enqueue/3, dequeue/2, delete/1]).
 
 %% Scrutiny
 -export([qstate/1]).
@@ -97,6 +97,8 @@ out(Ts, CoDelState) ->
 -spec init(pos_integer(), pos_integer()) -> #state{}.
 init(Target, Interval) when Target > Interval -> exit(misconfiguration);
 init(Target, Interval) -> #state{ target = Target, interval = Interval }.
+
+delete(#state { queue = Q }) -> ?Q:delete(Q).
 
 %% @doc Enqueue a packet
 %% <p>Enqueue packet `Pkt' at time `TS' into the queue.</p>

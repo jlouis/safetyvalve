@@ -22,13 +22,15 @@
 %%% @end
 -module(sv_queue_ets).
 
--export([new/0]).
+-export([new/0, delete/1]).
 
 -export([out/2, len/1, in/3]).
 
 new() ->
 	ets:new(queue, [protected, ordered_set]).
 	
+delete(Q) -> ets:delete(Q).
+
 out(_Ts, QName) ->
 	case ets:first(QName) of
 		'$end_of_table' -> {empty, [], QName};
