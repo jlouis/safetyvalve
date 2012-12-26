@@ -9,8 +9,10 @@ start(TimePoint) ->
 start_link(TimePoint) ->
     proc_lib:spawn_link(fun () -> do_work(TimePoint) end).
 
+%% @todo: Handle time as part of the model here
+%% @todo: Especially around "done" as well.
 do_work(TimePoint) ->
-    case sv:run(test_queue_1, TimePoint,
+    case sv:run(test_queue_1,
                 fun () ->
                             done = manager:doing_work()
                 end) of

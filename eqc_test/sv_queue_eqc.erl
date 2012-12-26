@@ -106,6 +106,7 @@ advance_time_next(#state { time_point = X } = State, _, [Step]) ->
 
 %% POLLING OF THE QUEUE
 %% ----------------------------------------------------------------------
+%%% @todo Replenish needs to track time at which point we replenish.
 replenish() ->
     sv_queue:replenish(?Q),
     timer:sleep(1),
