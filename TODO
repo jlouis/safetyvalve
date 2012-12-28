@@ -2,5 +2,5 @@ GH/jlouis/safetyvalve
 
 http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.25.8277
 
-· Make CoDel able to initialize with parameters on the command line.
-· Merge in CoDel into the main line.
+· Carry out some serious performance tests.
+· Consider having load measurement *outside* the sv_queue process.
