@@ -12,7 +12,7 @@
 -module(sv_codel).
 
 %% Public API
--export([new/0, in/3, out/2, len/1]).
+-export([new/0, new/2, in/3, out/2, len/1]).
 -export([init/2, enqueue/3, dequeue/2, delete/1]).
 
 %% Scrutiny
@@ -72,8 +72,9 @@ qstate(#state {
 
 %% Queue API
 %% -----------------------------
-new() ->
-  init(50*1000, 500*1000).
+new() -> new(5, 100).
+new(Target, Interval) ->
+  init(Target*1000, Interval*1000).
   
 len(#state { queue = Q }) -> ?Q:len(Q).
 

@@ -18,6 +18,11 @@ See the document USING.md for a usage example.
 
 # Changes
 
+### v2.0.0 -> v2.2.0
+
+Allow to pass parameters to queue algorithms. In particular, use this to provide parameters to the CoDel
+classifier. Change should be fully backwards compatible.
+
 ### v2.0.0 -> v2.1.0
 
 Enable a new configuration parameter, `queue_type`. This parameter defines a module which handles the queueing strategy used by the system. In short, queues are now plugable. If omitted, the queue defaults to `sv_queue_ets` which is an ETS-based queueing strategy. Hence, the minor version bump as it should not affect any users and be fully backwards compatible.
@@ -89,6 +94,7 @@ we want to run. Currently, you can pick among the following:
 
 * `sv_queue_ets` - An ETS based queue. Jobs are stored in an `ordered_set` ETS table as `{Timestamp, Job}` and are picked by calling `ets:first/1`.
 * `sv_codel` - A CoDel classifier (Controlled Delay - pronounced 'coddle'). CoDel is a *parameterless*, *burst permitting* delay controller. the CoDel algorithm targets a given wanted latency for a job in queue and begins rejecting jobs if that latency is not met. Also, it has hysteresis-like capabilities which allows the algorithm to handle sudden bursts of traffic. **CoDel is currently experimental**.
+* `{sv_codel, [Target, Interval]}` - A CoDel classifier with tuned parameters. The `Target` parameter determines the desired queue latency in ms. The default is 5ms, used by the parameterless CoDel classifier. The `Interval` parameter defines the window before CoDel should begin dropping packets. The default is 100ms. So if we have been above the target for interval ms, then the queue algorithm will begin dropping. For some jobs, however, it may be desirable to tune these parameters up. **CoDel is currently experimental**.
 
 The rest of the configuration will tell the queue to poll once every 1000ms via
 the `hz` value. Setting this value lower makes the queue reconsider

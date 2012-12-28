@@ -2,10 +2,5 @@ GH/jlouis/safetyvalve
 
 http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.25.8277
 
-· Make the queue type modular in sv_queue.
-  · Reinstate EQC test for sv_queue.
-  
-· Measure the CoDel stuff.
-  How do we measure this stuff? We add a tracer process and outputs data
-  to it. Then we pick up the traces and log it to a file so we can track it later.
-  We then output into R and plot the measurement.
+· Make CoDel able to initialize with parameters on the command line.
+· Merge in CoDel into the main line.

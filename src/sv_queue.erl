@@ -36,7 +36,7 @@
 
 -define(SERVER, ?MODULE). 
 
--record(conf, { hz, rate, token_limit, size, concurrency, queue_type }).
+-record(conf, { hz, rate, token_limit, size, concurrency, queue_type, queue_args }).
 -record(state, {
           %% Conf is the configuration object this queue is configured
           %% with. It is a place to query about conf options
@@ -68,13 +68,19 @@ start_link(Name, Conf) ->
     gen_server:start_link({local, Name}, ?MODULE, [Conf], []).
 
 parse_configuration(Conf) ->
+    {QueueType, QueueArgs} =
+        case proplists:get_value(queue_type, Conf, sv_queue_ets) of
+            {QT, Args} -> {QT, Args};
+            QT when is_atom(QT) -> {QT, []}
+        end,
     #conf {
       hz = proplists:get_value(hz, Conf),
       rate = proplists:get_value(rate, Conf),
       token_limit = proplists:get_value(token_limit, Conf),
       size = proplists:get_value(size, Conf),
       concurrency = proplists:get_value(concurrency, Conf),
-      queue_type = proplists:get_value(queue_type, Conf, sv_queue_ets)
+      queue_type = QueueType,
+      queue_args = QueueArgs
     }.
 
 ask(Name) ->
@@ -99,8 +105,9 @@ q(Name, Atom) ->
 init([Conf]) ->
     set_timer(Conf),
     QT = Conf#conf.queue_type,
+    QArgs = Conf#conf.queue_args,
     {ok, #state{ conf = Conf,
-                 queue = QT:new(),
+                 queue = apply(QT, new, QArgs),
                  tokens = min(Conf#conf.rate, Conf#conf.token_limit),
                  tasks = gb_sets:empty() }}.
 
