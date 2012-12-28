@@ -18,7 +18,7 @@ See the document USING.md for a usage example.
 
 # Changes
 
-### v2.0.0 -> v2.2.0
+### v2.1.0 -> v2.2.0
 
 Allow to pass parameters to queue algorithms. In particular, use this to provide parameters to the CoDel
 classifier. Change should be fully backwards compatible.
