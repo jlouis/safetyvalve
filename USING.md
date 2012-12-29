@@ -1,3 +1,40 @@
+# Using the safetyvalve system
+
+The first question to ask oneself is if safetyvalve is at all a tool you need. The price you are paying with safetyvalve in its current setup is that every request must factor through the `sv_queue` process and this will hurt performance when you are running very fast.
+
+There is a tool which can be used in many situations which is simple and efficient. Whenever you want to run a process, you ask the system statistics for the current load. If the load is above a threshold, you deny the job. This is a simple and efficient measure, it can be made to run and a highly concurrent fashion, it is independent of the underlying machine. And so on. Basically, you write a process which measures the current load on the system and you then stop serving new requests if the load is currently too high.
+
+While this method works, it does have a couple of weaknesses. One is that you have no queueing, so you cannot take sudden small spiky bursts in traffic. Also, while this is effective when you have 400.000 connections and more, it doesn't really work if the resources you are looking at are severely constrained. Nor does it work if the work you are going to do are heavyweight.
+
+Another thing to think about is the duration of the task you want to execute. In a telephony switch, a call taken is going to last a minute easily on average, perhaps even more. This means that taking a new call on is a long-lived task. In a web server on the other hand, a task can often be solved in milliseconds. This means that the current amount of concurrent work will dissipate very quickly and thus it is perhaps more okay to queue requests for a little while.
+
+## The purpose of a queue
+
+Why do we add queues to our system? The main reason is to smooth out spikes. That is, if requests enter the system very quickly, we don't want to process all requests just now, but rather take them in a bit at a time at a given well defined rate where we know we can handle the load. If we get bombed with 1000 requests in 2 ms, we might not want to make 1000 requests to a backend system. While Erlang can naturally handle the load, it might not be the case for the database you call. This is the purpose of the queue. It lets us handle all the requests, if the requests are willing to wait around a bit.
+
+One should also beware queues though. Since new requests enter the back of the queue, they have to travel through the queue before they can get service. The time through the queue—the sojourn time—is added latency on the request. If your requests are of batch-nature, you don't care about this time. You just want all requests processed eventually and the time you are willing to accept may be 24 hours or even more. On the contrary, if you are serving real-time requests, the acceptable sojourn time may be measured in milliseconds. If a customer is waiting for the request, you can't let them wait too long. Otherwise they will live before you can produce a satisfactory answer.
+
+This means you cannot just add a queue of infinite size in the realtime scenario. Rather you must cap the size of the queue and decide what to do when the queue runs full. Or when the sojourn time in the queue becomes too high.
+
+Safetyvalve provides a `queue_size` parameter for the first case. And provides a `CoDel` classifier for the second case. CoDel will leave the queue alone until the sojourn time goes bad. Then it will begin dropping work from the queue until it can get the sojourn time down to acceptable levels again.
+
+## Typical use cases:
+
+Safetyvalve works best in some specific cases:
+
+* A task is going to use some heavily limited resource. You may only have 30 database connections open on some database systems for instance. And adding more might not be smart since you will have worse performance for everyone due to heavy disk seeks.
+* A task will use a lot of memory when it runs. Therefore, you need an upper bound on the amount of these tasks that are running at the same time.
+* A task is CPU-bound. Hence you would rather like to have relatively few of them and having them finish; Not thousands running at the same time.
+* You are going to make HTTP requests to another system and that system is known to be slow to respond and easy to overload.
+
+## Typical non-use cases:
+
+* You want to go as fast as possible. It is better to ask about scheduler usage or process count in this case. It lets individual processes run concurrently and does not impose a limit by the `sv_queue` process.
+* You are more concerned about a specific client overloading your system. That is, you want to run an intensity model for a given user. In this case, it is often better to hash the client into a bucket and keep an intensity regulation on the bucket. Note is is enough to have a decay algorithm where you store a pair of `{Intensity, Timestamp}` and update according to a decay parameter. Inspiration might be found in the OTP module `overload`.
+* You want to queue clients *and* are interested in per-client load. Again, hashing into buckets and running an SFQ over CoDel is a patch that might get in later, but it is not supported right now.
+* All jobs started *must* finish. Load regulation means that we throw away work in the overload situation.
+* You need load regulation feedback. Currently, we don't sample the system and impose further constraints on queues when the system is highly loaded.
+
 # An example of using the safetyvalve system
 
 Let us say we have a system like the epgsql driver,
