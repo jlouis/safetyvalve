@@ -9,7 +9,7 @@ init({tcp, http}, Req, _Opts) ->
 
 handle(InReq, State) ->
     case sv:run(ws_q, fun() ->
-        {ok, Req2} = cowboy_req:reply(202, [], <<"Hello World">>, InReq),
+        {ok, Req2} = cowboy_req:reply(200, [], <<"Hello World">>, InReq),
         Req2
        end) of
         {ok, Req2} -> {ok, Req2, State};
