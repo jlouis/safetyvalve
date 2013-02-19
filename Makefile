@@ -46,8 +46,7 @@ dialyzer:
 	@echo Use "'make build_plt'" to build PLT prior to using this target.
 	@echo
 	@sleep 1
-	dialyzer --fullpath --plt $(COMBO_PLT) deps/*/ebin ebin | \
-	    fgrep -v -f ./dialyzer.ignore-warnings
+	dialyzer --fullpath --plt $(COMBO_PLT) deps/*/ebin ebin
 
 cleanplt:
 	@echo
