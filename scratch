@@ -8,8 +8,21 @@ Links:
   
 TODO list:
 ---------------------------------------------------------------
+→ Handle killed processes that are queueing.
+  A new command type is introduced: kill_queueing. It can only trigger when there is something in the queue. If it triggers, it kills a guy in the queue and waits for the system to correctly update its new state. The rule is that the queue is one smaller after this kill has happened.
+  
+  This will fail on the current code, until we fix it.
+· Handle killed processes that are working.
+  A new command type is introduced: kill_working. This kills one of the concurrent workers and it should then transition based on whether there are someone in the queue or not. If not, then the concurrency count goes down by one. If there are, the queue goes down by one because the other becomes a running worker.
+· Randomize the selection of a process to kill, but with a shrinking to do it deterministically
+  Order all processes by some order.
+  `SELECT' the process to kill explicitly.
+  `SHRINK' by picking the first one deterministically.
 
-→ Run a series of tests on the code base where we substitute the current queue model
+· Consider adding hook points for managing dampening.
+  Basically, a queue can be dampened. When this happens, the queue will run at a lower rating until you clear
+  the dampening factor.
+· Run a series of tests on the code base where we substitute the current queue model
   with a new one.
   OK Fix a thing about timestamps in the model: Enqueueing advances time as well.
     If we don't implement this, we break the specification.
