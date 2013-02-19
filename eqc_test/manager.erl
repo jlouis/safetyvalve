@@ -12,12 +12,15 @@
 
 %% API
 -export([start/0, start_link/0]).
--export([spawn_worker/1,
+-export([
          current_pids/0,
          doing_work/0,
+         kill_worker_queueing/0,
+         kill_worker_working/0,
          mark_done/0,
-         status/1,
          read_status/1,
+         spawn_worker/1,
+         status/1,
          stop/0
         ]).
 
@@ -63,6 +66,12 @@ mark_done() ->
 current_pids() ->
     gen_server:call(?MODULE, current_pids).
 
+kill_worker_working() ->
+    gen_server:call(?MODULE, kill_worker_working).
+    
+kill_worker_queueing() ->
+    gen_server:call(?MODULE, kill_worker_queueing).
+
 stop() ->
     gen_server:call(?MODULE, stop).
 
@@ -91,6 +100,22 @@ handle_call({read_status, Pid}, _From, State) ->
 handle_call(current_pids, _From, #state { workers = Workers } = State) ->
     Pids = [P || {P, _} <- Workers],
     {reply, Pids, State};
+handle_call(kill_worker_working, _From, #state { workers = Workers } = State) ->
+    case [Pid || {Pid, {working, _}} <- Workers] of
+        [] ->
+            {reply, {error, none_working}};
+        [Pid | _T] ->
+            exit(Pid, destroy),
+            {reply, {ok, Pid}, State}
+    end;
+handle_call(kill_worker_queueing, _From, #state { workers = Workers } = State) ->
+    case [Pid || {Pid, queueing} <- Workers] of
+        [] ->
+            {reply, {error, none_queueing}};
+        [Pid | _T] ->
+            exit(Pid, destroy),
+            {reply, {ok, Pid}, State}
+    end;
 handle_call(mark_done, _From, #state { workers = Workers } = State) ->
     case [{Pid, From} || {Pid, {working, From}} <- Workers] of
         [] ->
