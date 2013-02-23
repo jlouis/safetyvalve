@@ -25,6 +25,7 @@
 -export([new/0, delete/1]).
 
 -export([out/2, len/1, in/3]).
+-export([prune/2]).
 
 new() ->
 	ets:new(queue, [protected, ordered_set]).
@@ -43,7 +44,11 @@ out(_Ts, QName) ->
 len(QName) ->
 	ets:info(QName, size).
 	
-%% Format is kept like this to make sure it follows that of the `queue' module.
 in(Item, Ts, QName) ->
 	true = ets:insert_new(QName, {Ts, Item}),
 	QName.
+	
+prune(Ref, QName) ->
+	ets:match_delete(QName, {'_', {'_', Ref}}),
+	QName.
+

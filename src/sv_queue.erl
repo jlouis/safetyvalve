@@ -163,10 +163,14 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% @private
-handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
+handle_info({'DOWN', Ref, _, _, _}, #state { queue = Q, tasks = TS, conf = Conf } = State) ->
+    QT = Conf#conf.queue_type,
     Now = sv:timestamp(),
-    NewState = process_queue(Now, State#state { tasks = gb_sets:del_element(Ref, TS) }),
-    {noreply, NewState};
+    PrunedTS = gb_sets:del_element(Ref, TS),
+    case TS == PrunedTS of
+      true -> {noreply, process_queue(Now, State#state { tasks = PrunedTS }) };
+      false -> {noreply, State#state { queue = QT:prune(Ref, Q) }}
+    end;
 handle_info({replenish, TS}, State) ->
     NewState = process_queue(TS, refill_tokens(State)),
     {noreply, NewState};
@@ -211,9 +215,8 @@ process_queue(Now, K, Q, QT, TS, Started) ->
         {drop, Dropped, Q2} ->
             drop(Dropped),
             process_queue(Now, K, Q2, QT, TS, Started);
-        {{Pid, _} = From, Dropped, Q2} ->
+        {{From, Ref}, Dropped, Q2} ->
             drop(Dropped),
-            Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
             process_queue(Now, K-1, Q2, QT, gb_sets:add_element(Ref, TS), Started+1);
         {empty, Dropped, Q2} ->
@@ -221,10 +224,11 @@ process_queue(Now, K, Q, QT, TS, Started) ->
             {Started, Q2, TS}
     end.
 
-enqueue(Term, Timestamp, Q, #conf { size = Sz, queue_type = QT } ) ->
+enqueue({Pid, _Tag} = From, Timestamp, Q, #conf { size = Sz, queue_type = QT } ) ->
     case QT:len(Q) of
         K when K < Sz ->
-            {ok, QT:in(Term, Timestamp, Q)};
+            Ref = erlang:monitor(process, Pid),
+            {ok, QT:in({From, Ref}, Timestamp, Q)};
         K when K == Sz ->
             queue_full
     end.
