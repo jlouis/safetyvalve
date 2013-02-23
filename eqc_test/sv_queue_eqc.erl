@@ -310,6 +310,7 @@ weight(#state { concurrency = C, queue = Q, tokens = T }, enqueue) ->
         {0, 0, T} when T > 0 -> 100;
         {C, 0, T} when C > 0, T > 0 -> 800
     end;
+weight(#state { queue = Q }, kill_queueing) -> 50; %% Highly unlikely in a scenario, but do it once in a while
 weight(#state { concurrency = C, queue = Q, tokens = T }, done) ->
     case {C, length(Q), T} of
         {_, 0, _} -> 100;
