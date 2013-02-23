@@ -95,8 +95,10 @@ handle_call({status, S}, {Pid, _Tag}, #state { workers = Workers } = State) ->
     {reply, ok, State#state {
                   workers = lists:keyreplace(Pid, 1, Workers, {Pid, {res, S}}) }};
 handle_call({read_status, Pid}, _From, State) ->
-    {_Key, Response} = lists:keyfind(Pid, 1, State#state.workers),
-    {reply, Response, State};
+    case lists:keyfind(Pid, 1, State#state.workers) of
+        {_Key, Response} -> {reply, Response, State};
+        false -> not_found
+    end;
 handle_call(current_pids, _From, #state { workers = Workers } = State) ->
     Pids = [P || {P, _} <- Workers],
     {reply, Pids, State};

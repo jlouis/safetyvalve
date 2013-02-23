@@ -233,8 +233,7 @@ done_command(_S) ->
 
 done_pre(#state { concurrency = C }) when C > 0 -> true;
 done_pre(_) -> false.
-
-
+    
 %% TODO: The when C > 0's here are really redundant since the
 %% precondition filters out any problem.
 done_next(#state { concurrency = C,
@@ -261,6 +260,35 @@ done_post(#state { concurrency = C, queue = Q, tokens = T }, _, Res) ->
           when C > 0, K > 0, T > 0,
                R == T-1 -> true;
         R -> {error, {done, R}}
+    end.
+ 
+%% KILLING PROCESSES BEFORE THEY ARE DEQUEUED
+%% ---------------------------------------
+kill_queueing() ->
+    case manager:kill_worker_queueing() of
+        {ok, Pid} ->
+            timer:sleep(1),
+            eqc_helpers:fixpoint([whereis(manager), whereis(?Q) | manager:current_pids()]),
+            {manager:read_status(Pid), sv_queue:q(?Q, len)};
+        {error, none_queueing} ->
+            error_logger:info_report([process_info(whereis(manager))]),
+            {error, none_queueing}
+    end.
+
+kill_queueing_command(_S) ->
+    {call, ?MODULE, kill_queueing, []}.
+
+%% We may kill something queueing whenever there is something in the queue
+kill_queueing_pre(#state { queue = Q }) when length(Q) > 0 -> true;
+kill_queueing_pre(_) -> false.
+
+kill_queueing_next(#state { queue = Q } = S) ->
+    S#state { queue = q_remove(1, Q) }.
+
+kill_queueing_post(#state { queue = Q }, _, Res) ->
+    case {length(Q), Res} of
+        {K, {not_found, L}} when K-1 == L -> true;
+        R -> {error, {kill_queueing, R}}
     end.
 
 %% WEIGHTS
