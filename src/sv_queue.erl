@@ -114,6 +114,9 @@ init([Conf]) ->
 %% @private
 handle_call({q, tokens}, _, #state { tokens = K } = State) ->
     {reply, K, State};
+handle_call({q, len}, _, #state { queue = Q, conf = C} = State) ->
+    QT = C#conf.queue_type,
+    {reply, QT:len(Q), State};
 handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 		 #state {
 		 	tokens = K,
