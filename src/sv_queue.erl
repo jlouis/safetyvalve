@@ -150,7 +150,7 @@ handle_call({ask, Timestamp}, From,
             {reply, {error, queue_full}, State}
     end;
 handle_call({done, Now, Ref}, _From, #state { tasks = Tasks } = State) ->
-    true = erlang:demonitor(Ref),
+    true = erlang:demonitor(Ref, [flush]),
     NewState = State#state { tasks = gb_sets:del_element(Ref, Tasks) },
     {reply, ok, process_queue(Now, NewState) };
 handle_call(Request, _From, State) ->
