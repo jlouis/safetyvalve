@@ -261,6 +261,7 @@ set_timer(#conf { hz = undefined }) -> ok;
 set_timer(#conf { hz = Hz }) ->
     erlang:send_after(Hz, self(), replenish).
 
-drop(Tasks) ->
-    [gen_server:reply(F, {error, overload}) || F <- Tasks],
-    ok.
+drop([]) -> ok;
+drop([{From, _Ref} | Ts]) ->
+    gen_server:reply(From, {error, overload}),
+    drop(Ts).
