@@ -2,5 +2,9 @@ GH/jlouis/safetyvalve
 
 http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.25.8277
 
+· Why is the codel test failing? This is rather odd. It ends up with timeouts,
+  which it shouldn't do. So we have to figure out why it does so⋯
+
 · Carry out some serious performance tests.
 · Consider having load measurement *outside* the sv_queue process.
+· Add some tracing code for the event tracer, so we can see what is going on :)

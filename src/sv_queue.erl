@@ -123,6 +123,7 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 			conf = Conf,
 			queue = Q,
 			tasks = Tasks } = State) when K > 0 ->
+    sv:report(Timestamp, ask),
     %% Let the guy run, since we have excess tokens:
     case analyze_tasks(Tasks, Conf) of
         concurrency_full ->
@@ -142,6 +143,7 @@ handle_call({ask, Timestamp}, From,
 		tokens = 0,
 		conf = Conf,
 		queue = Q } = State) ->
+    sv:report(Timestamp, ask),
     %% No more tokens, queue the guy
     case enqueue(From, Timestamp, Q, Conf) of
         {ok, NQ} ->
@@ -150,6 +152,7 @@ handle_call({ask, Timestamp}, From,
             {reply, {error, queue_full}, State}
     end;
 handle_call({done, Now, Ref}, _From, #state { tasks = Tasks } = State) ->
+    sv:report(Now, {done, Ref}),
     true = erlang:demonitor(Ref, [flush]),
     NewState = State#state { tasks = gb_sets:del_element(Ref, Tasks) },
     {reply, ok, process_queue(Now, NewState) };
@@ -164,18 +167,21 @@ handle_cast(_Msg, State) ->
 
 %% @private
 handle_info({'DOWN', Ref, _, _, _}, #state { queue = Q, tasks = TS, conf = Conf } = State) ->
-    QT = Conf#conf.queue_type,
     Now = sv:timestamp(),
+    sv:report(Now, 'DOWN'),
+    QT = Conf#conf.queue_type,
     PrunedTS = gb_sets:del_element(Ref, TS),
     case TS == PrunedTS of
       true -> {noreply, process_queue(Now, State#state { tasks = PrunedTS }) };
       false -> {noreply, State#state { queue = QT:prune(Ref, Q) }}
     end;
 handle_info({replenish, TS}, State) ->
+    sv:report(TS, replenish),
     NewState = process_queue(TS, refill_tokens(State)),
     {noreply, NewState};
 handle_info(replenish, #state { conf = C } = State) ->
     Now = sv:timestamp(),
+    sv:report(Now, replenish),
     NewState = process_queue(Now, refill_tokens(State)),
     set_timer(C),
     {noreply, NewState};
@@ -217,6 +223,7 @@ process_queue(Now, K, Q, QT, TS, Started) ->
             process_queue(Now, K, Q2, QT, TS, Started);
         {{From, Ref}, Dropped, Q2} ->
             drop(Dropped),
+            sv:report(Now, {go, Ref}),
             gen_server:reply(From, {go, Ref}),
             process_queue(Now, K-1, Q2, QT, gb_sets:add_element(Ref, TS), Started+1);
         {empty, Dropped, Q2} ->

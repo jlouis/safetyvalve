@@ -15,9 +15,18 @@ start_link(Filename) ->
 stop() ->
     gen_server:call(?MODULE, stop).
     
-write_event({trace, _Pid, call, {sv, report, [Now, {dodequeue, QSize, Sojourn}]}, _}, {Start, Fd}) ->
-    file:write(Fd, [integer_to_list(Now - Start), $,, integer_to_list(QSize), $,, integer_to_list(Sojourn), $\n]),
+write_event({trace, _Pid, call, {sv, report, [Now, Event]}, _}, {Start, Fd}) ->
+    Trace = format_event(Event),
+    Passed = integer_to_list(Now - Start),
+    file:write(Fd, [Passed, $,,Trace, $\n]),
     {Start, Fd}.
+
+format_event(ask) -> ["ask"];
+format_event({done, _Ref}) -> ["done"];
+format_event(replenish) -> ["replenish"];
+format_event({go, _Ref}) -> ["go"];
+format_event({dodequeue, QSize, Sojourn}) ->
+    [integer_to_list(QSize), $,, integer_to_list(Sojourn)].
 
 %% Callbacks
 init([Filename]) ->
