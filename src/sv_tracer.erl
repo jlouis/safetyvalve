@@ -21,6 +21,7 @@ write_event({trace, _Pid, call, {sv, report, [Now, Event]}, _}, {Start, Fd}) ->
     file:write(Fd, [Passed, $,,Trace, $\n]),
     {Start, Fd}.
 
+format_event('DOWN') -> ["DOWN"];
 format_event(ask) -> ["ask"];
 format_event({done, _Ref}) -> ["done"];
 format_event(replenish) -> ["replenish"];
