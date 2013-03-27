@@ -13,7 +13,7 @@
 
 %% Public API
 -export([new/0, new/2, in/3, out/2, len/1]).
--export([init/2, enqueue/3, dequeue/2, delete/1]).
+-export([init/2, enqueue/3, dequeue/2, delete/1, prune/2]).
 
 %% Scrutiny
 -export([qstate/1]).
@@ -83,6 +83,10 @@ in(Item, Ts, CoDelState) ->
     
 out(Ts, CoDelState) ->
    dequeue(Ts, CoDelState).
+
+prune(Ref, #state { queue = Q } = S) ->
+    NQ = ?Q:prune(Ref, Q),
+    S#state { queue = NQ }.
 
 %% @doc Initialize the CoDel state
 %% <p>The value `Target' defines the delay target in ms. If the queue has a sojourn-time through the queue

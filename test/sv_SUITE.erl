@@ -117,8 +117,6 @@ collect(Pids, Overloads) when is_list(Pids) ->
             {error, {timeout, Pids, Overloads}}
     end.
 
-    
-
 work() ->
     timer:sleep(30),
     ok.
