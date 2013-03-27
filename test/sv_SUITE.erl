@@ -99,10 +99,10 @@ many_through_codel(_Config) ->
         end),
         timer:sleep(20),
         Pid
-      end || _ <- lists:seq(1, 20)],
+      end || _ <- lists:seq(1, 60)],
     {ok, Overloads} = collect(Pids, 0),
     ct:log("Overloads: ~B", [Overloads]),
-    false = Overloads > 0.
+    true = Overloads > 0.
 
 %% ----------------------------------------------------------------------
 collect([], Overloads) ->
@@ -113,7 +113,7 @@ collect(Pids, Overloads) when is_list(Pids) ->
             collect(Pids -- [Pid], Overloads);
         {overload, Pid} ->
             collect(Pids -- [Pid], Overloads + 1)
-    after 15000 ->
+    after 5000 ->
             {error, {timeout, Pids, Overloads}}
     end.
 
