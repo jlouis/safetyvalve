@@ -172,8 +172,8 @@ handle_info({'DOWN', Ref, _, _, _}, #state { queue = Q, tasks = TS, conf = Conf 
     QT = Conf#conf.queue_type,
     PrunedTS = gb_sets:del_element(Ref, TS),
     case TS == PrunedTS of
-      true -> {noreply, process_queue(Now, State#state { tasks = PrunedTS }) };
-      false -> {noreply, State#state { queue = QT:prune(Ref, Q) }}
+      false -> {noreply, process_queue(Now, State#state { tasks = PrunedTS }) };
+      true -> {noreply, State#state { queue = QT:prune(Ref, Q) }}
     end;
 handle_info({replenish, TS}, State) ->
     sv:report(TS, replenish),
