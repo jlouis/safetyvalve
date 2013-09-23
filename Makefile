@@ -21,13 +21,13 @@ ct_setup:
 
 ct: ct_setup compile
 	erl -noshell \
-            -pa deps/*/ebin -pa ebin \
-	    -sname ct \
-	    -env TEST_DIR test \
-	    -spec ct/sv.spec \
-	    -config ct/test.config \
-            -dir test \
-            -s ct_run script_start -s erlang halt
+	 -pa deps/*/ebin -pa ebin \
+	 -sname ct \
+	 -env TEST_DIR test \
+	 -spec ct/sv.spec \
+	 -config ct/test.config \
+	 -dir test \
+	 -s ct_run script_start -s erlang halt
 
 ## DIALYZER
 ## ----------------------------------------------------
