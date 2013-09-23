@@ -8,6 +8,7 @@
                   stdlib,
                   lager
                  ]},
+  {modules, []},                 
   {mod, { safetyvalve_app, []}},
   {env, []}
  ]}.
