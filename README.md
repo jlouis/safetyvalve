@@ -1,6 +1,6 @@
-# Safety Valve
+# Safetyvalve
 
-The Safety Valve Erlang application provides overload protection for
+The Safetyvalve Erlang application provides overload protection for
 Erlang systems. It provides queueing facilities for tasks to be
 executed so their concurrency and rate can be limited on a running
 system.
@@ -17,6 +17,10 @@ This project uses semantic versioning. Tags are declared like `vX.Y.Z`
 See the document USING.md for a usage example.
 
 # Changes
+
+### v2.2.0 -> v2.3.0
+
+Add explicit calls to `sv:ask/2` and `sv:done/3`. These calls allows one to run resource acquisition and release in different scopes. While this is slighty dangerous, there are places where one needs exactly this behaviour in systems.
 
 ### v2.1.0 -> v2.2.0
 
