@@ -47,8 +47,9 @@ This will work, but it has the problem that if we suddenly get too many processe
 
 First, we create a queue. This is done by configuring the safetyvalve application in `sys.config` or similar place.
 
-	{safetyvalve,
-		{queues, [{pg_q, [{hz, 500}, {rate, 20}, {token_limit, 30}, {size, 30}, {concurrency, 32}]}]}},
+	{safetyvalve,[
+		{queues, [{pg_q, [{hz, 500}, {rate, 20}, {token_limit, 30}, {size, 30}, {concurrency, 32}]}]}
+	]}
 		
 This says the following:
 
