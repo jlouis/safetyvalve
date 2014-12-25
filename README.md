@@ -18,6 +18,10 @@ See the document USING.md for a usage example.
 
 # Changes
 
+### v2.3.0 -> v2.3.1
+
+Introduce release 17.0 as a supported architecture. Update the lager dependency.
+
 ### v2.2.0 -> v2.3.0
 
 Add explicit calls to `sv:ask/2` and `sv:done/3`. These calls allows one to run resource acquisition and release in different scopes. While this is slighty dangerous, there are places where one needs exactly this behaviour in systems.
