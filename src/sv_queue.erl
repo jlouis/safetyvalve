@@ -94,7 +94,8 @@ done(Name, Ref, Timestamp) ->
     gen_server:call(Name, {done, Timestamp, Ref}, infinity).
 
 replenish(Name) ->
-    Name ! replenish.
+    Name ! replenish,
+    ok.
 
 q(Name, Atom) ->
     gen_server:call(Name, {q, Atom}).
@@ -108,7 +109,7 @@ init([Conf]) ->
     QArgs = Conf#conf.queue_args,
     {ok, #state{ conf = Conf,
                  queue = apply(QT, new, QArgs),
-                 tokens = min(Conf#conf.rate, Conf#conf.token_limit),
+                 tokens = Conf#conf.token_limit,
                  tasks = gb_sets:empty() }}.
 
 %% @private
