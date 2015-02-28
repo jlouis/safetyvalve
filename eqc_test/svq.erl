@@ -3,21 +3,21 @@
 %% This module apapts the old queue test into a new queue test where we use the new
 %% blocking features of Erlang QuickCheck to handle the queue behaviour.
 %%
-%% This crux of the problem is to handle the queue as we go along, by having a simpler
-%% model of the queue and what the queue is doing.
+%% The key insight is that we can model a typical safetyvalve task as a process which may
+%% block twice. First time because it gets queued, and the second time while it is doing
+%% "work". We can model this in a state by having a queue of who is queued (the processes
+%% currently 'asking') and a set of who is doing work ('working').
 %%
-%% Here is the remarkable insight: we only need to track queue sizes in the model as a
-%% start. The size of the queue and the current number of executing workers and the
-%% current number of tokens in the bucket, encodes a model which has to run correctly
-%%  w.r.t the underlying sv_queue implementation.
+%% Simple analysis of the model state determines when a process will block or not, by looking
+%% at the representation of how many processes are asking and how many are doing work and
+%% how many tokens we have left.
 %%
-%% In the following, we have a triple {C, Sz, T}, where C is the current number of
-%% concurrent workers, Sz is the size of the queue, and T is the token count. There are
-%% 10 rules for handling such a triple, depending on the possible cases for the system.
-%% The following Handles these possibilities one by one, and documents the cases one
-%% by one. In the simplied model, we assume a constant token fill-rate of 1, though in
-%% practice this number can be any positive rate.
+%% The task can be described entirely by ?BLOCK/?UNBLOCK rules in the _callout/2 sections
+%% of the commands.
 %%
+%% The remarkable result is an extremely simple model on one hand, but with a lot of power.
+%% The simple specification provides a complete randomized run–time harness around the
+%% SafetyValve system and checks it for correctness.
 -module(svq).
 -compile([export_all]).
 
