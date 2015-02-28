@@ -42,11 +42,11 @@
 state_range(N) -> choose(1, N).
 
 initial_state() ->
-    ?LET(MaxT, state_range(2),
+    ?LET(MaxT, state_range(5),
       #state {
       	working = [], asking = [], tokens = MaxT,
-      	max_working = state_range(1),
-      	max_asking = state_range(1),
+      	max_working = state_range(5),
+      	max_asking = state_range(5),
       	max_tokens = MaxT
     }).
 
