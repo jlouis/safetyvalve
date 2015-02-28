@@ -207,6 +207,8 @@ end_work(Pid) ->
     
 %% PROPERTIES
 %% ----------------------------------------------------------------------
+postcondition_common(S, Call, Res) ->
+    eq(Res, return_value(S, Call)).
 
 set_queue(
         #state {
