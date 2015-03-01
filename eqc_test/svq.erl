@@ -77,9 +77,7 @@ task_callouts(#state { asking = As, max_asking = MaxA } = S, []) ->
             ?RET(R)
         end;
       true ->
-        ?APPLY(add_asking, [?SELF]),
-        ?BLOCK(?SELF),
-        ?APPLY(del_asking, [?SELF]),
+        ?APPLY(await_task, []),
         ?MATCH(R, ?APPLY(run_task, [])),
         ?RET(R)
     end.
@@ -176,6 +174,11 @@ del_working_next(S, _V, [Pid]) ->
     
 add_tokens_next(#state { tokens = Tokens, max_tokens = MaxT } = S, _V, [Rate]) ->
     S#state { tokens = min(Tokens + Rate, MaxT) }.
+
+await_task_callouts(_S, []) ->
+    ?APPLY(add_asking, [?SELF]),
+    ?BLOCK,
+    ?APPLY(del_asking, [?SELF]).
 
 run_task_callouts(_S, []) ->
     ?APPLY(add_working, [?SELF]),
