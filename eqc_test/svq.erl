@@ -30,7 +30,8 @@
 	tokens,
 	max_working,
 	max_asking,
-	max_tokens
+	max_tokens,
+	rate
 }).
 
 %% Queue name we are using throughout the test
@@ -47,7 +48,8 @@ initial_state() ->
       	working = [], asking = [], tokens = MaxT,
       	max_working = state_range(5),
       	max_asking = state_range(5),
-      	max_tokens = MaxT
+      	max_tokens = MaxT,
+      	rate = state_range(5)
     }).
 
 %% TASKS
@@ -121,6 +123,30 @@ done_callouts(_S, [Pid]) ->
 %%        {_C, K, T} when K > 0, T > 0 -> ["R010: Done, continue with next work task"]
 %%     end.
 
+%% REPLENISHING TOKENS
+%% ---------------------------------------------------------------------
+replenish() ->
+    sv_queue:replenish(?Q),
+    sv_queue:q(?Q, tokens).
+    
+replenish_args(_S) -> [].
+
+replenish_callouts(#state { rate = Rate} = S, []) ->
+    case will_unblock(S, {replenish, Rate}) of
+        [] -> ?APPLY(add_tokens, [Rate]);
+        Pids ->
+            ?APPLY(add_tokens, [Rate]),
+            ?SEQ([?UNBLOCK(P, ok) || P <- Pids])
+    end.
+
+replenish_return(#state {
+	tokens = T,
+	rate = Rate,
+	max_tokens = MaxT } = S, []) ->
+    NewTokens = min(T + Rate, MaxT),
+    NewTokens - count_unblock(S, {replenish, Rate}).
+
+
 %% BLOCKING CALLS
 %% ---------------------------------------------------------------------
 
@@ -148,6 +174,9 @@ add_working_callouts(#state { }, [_Pid])  ->
 del_working_next(S, _V, [Pid]) ->
     S#state { working = S#state.working -- [Pid] }.
     
+add_tokens_next(#state { tokens = Tokens, max_tokens = MaxT } = S, _V, [Rate]) ->
+    S#state { tokens = min(Tokens + Rate, MaxT) }.
+
 run_task_callouts(_S, []) ->
     ?APPLY(add_working, [?SELF]),
     ?BLOCK,
@@ -184,7 +213,23 @@ will_unblock(#state {
         {_, [], _} -> no;
         {_, _, 0} -> no;
         {_, [Next|_], _} -> {yes, Next}
-    end.
+    end;
+will_unblock(#state {asking = Asking } = S, Op = {replenish, _Rate}) ->
+    Eligible = count_unblock(S, Op),
+    lists:sublist(Asking, Eligible).
+    
+count_unblock(#state {
+	working = Workers,
+	asking = Asking,
+	tokens = Tokens,
+	max_tokens = MaxT,
+	max_working = MaxWs }, {replenish, Rate}) ->
+    BucketSize = min(Tokens + Rate, MaxT),
+    QueueSize = length(Asking),
+    WorkerSlots = MaxWs - length(Workers),
+    lists:min([BucketSize, QueueSize, WorkerSlots]).
+    
+ 
 
 %% STARTING AND ENDING WORK
 %% ----------------------------------------------------------------------
@@ -214,10 +259,11 @@ set_queue(
         #state {
           max_asking = MaxA,
           max_working = MaxWs,
-          max_tokens = MaxT }) ->
+          max_tokens = MaxT,
+          rate = Rate }) ->
     ok = application:set_env(safetyvalve, queues,
                              [{?Q, [{hz, undefined},
-                                              {rate, 1},
+                                              {rate, Rate},
                                               {token_limit, MaxT},
                                               {size, MaxA},
                                               {concurrency, MaxWs}
