@@ -121,6 +121,23 @@ done_callouts(_S, [Pid]) ->
 %%        {_C, K, T} when K > 0, T > 0 -> ["R010: Done, continue with next work task"]
 %%     end.
 
+%% KILLING WORK
+%% ----------------------------------------------------------------------
+
+kill_work(Pid) ->
+    true = exit(Pid, killed),
+    ok.
+    
+kill_work_args(#state { working = Workers }) ->
+    [elements(Workers)].
+    
+kill_work_pre(#state { working = Ws }) -> Ws /= [].
+
+kill_work_callouts(_S, [Pid]) ->
+    ?UNBLOCK(Pid, killed),
+    ?APPLY(unblock, []),
+    ?RET(ok).
+
 %% REPLENISHING TOKENS
 %% ---------------------------------------------------------------------
 replenish() ->
@@ -182,9 +199,12 @@ await_task_callouts(_S, []) ->
 
 run_task_callouts(_S, []) ->
     ?APPLY(add_working, [?SELF]),
-    ?BLOCK,
+    ?MATCH(Res, ?BLOCK),
     ?APPLY(del_working, [?SELF]),
-    ?RET(ok).
+    case Res of
+        killed -> ?RET(?EXCEPTION(killed));
+        ok -> ?RET(ok)
+    end.
 
 %% BLOCKING BEHAVIOUR
 %% ---------------------------------------------------------------------
