@@ -252,8 +252,6 @@ count_unblock(#state {
     WorkerSlots = MaxWs - length(Workers),
     lists:min([BucketSize, QueueSize, WorkerSlots]).
     
- 
-
 %% STARTING AND ENDING WORK
 %% ----------------------------------------------------------------------
 start_work() ->
@@ -285,12 +283,11 @@ set_queue(
           max_tokens = MaxT,
           rate = Rate }) ->
     ok = application:set_env(safetyvalve, queues,
-                             [{?Q, [{hz, undefined},
-                                              {rate, Rate},
-                                              {token_limit, MaxT},
-                                              {size, MaxA},
-                                              {concurrency, MaxWs}
-                                             ]}]).
+	[{?Q, [{hz, undefined},
+	 {rate, Rate},
+	 {token_limit, MaxT},
+	 {size, MaxA},
+	 {concurrency, MaxWs} ]}]).
 
 setup() ->
     ok.
