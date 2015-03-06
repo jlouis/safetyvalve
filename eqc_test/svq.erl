@@ -147,10 +147,10 @@ replenish() ->
 replenish_args(_S) -> [].
 
 replenish_callouts(#state { rate = Rate} = S, []) ->
+    ?APPLY(add_tokens, [Rate]),
     case will_unblock(S, {replenish, Rate}) of
-        [] -> ?APPLY(add_tokens, [Rate]);
+        [] -> ?EMPTY;
         Pids ->
-            ?APPLY(add_tokens, [Rate]),
             ?SEQ([?UNBLOCK(P, ok) || P <- Pids])
     end.
 
@@ -167,7 +167,8 @@ replenish_return(#state {
 
 unblock_callouts(S, []) ->
     case will_unblock(S, dequeue) of
-        no -> ?EMPTY;
+        no ->
+            ?EMPTY;
         {yes, Whom} ->
             ?UNBLOCK(Whom, ok)
     end.
