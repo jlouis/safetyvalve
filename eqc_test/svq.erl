@@ -305,7 +305,7 @@ set_queue(
 	 {concurrency, MaxWs} ]}]).
 
 setup() ->
-    ok.
+    cleanup().
     
 cleanup() ->
     (catch application:stop(safetyvalve)),
