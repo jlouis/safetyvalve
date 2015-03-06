@@ -3,21 +3,35 @@
 %% This module apapts the old queue test into a new queue test where we use the new
 %% blocking features of Erlang QuickCheck to handle the queue behaviour.
 %%
-%% The key insight is that we can model a typical safetyvalve task as a process which may
+%% The key insight is that we can model a typical safetyvalve task as a session which may
 %% block twice. First time because it gets queued, and the second time while it is doing
-%% "work". We can model this in a state by having a queue of who is queued (the processes
-%% currently 'asking') and a set of who is doing work ('working').
+%% "work". We can model this in a state by having a queue of who is queued
+%% (the processes currently 'asking') and a set of who is doing work ('working').
 %%
-%% Simple analysis of the model state determines when a process will block or not, by looking
-%% at the representation of how many processes are asking and how many are doing work and
-%% how many tokens we have left.
+%% The idea of turning "commands" into "sessions" is generally applicable and I believe
+%% it is the correct way to handle complicated interaction with lots of blocking. By making
+%% the code execute in a running session, one has much better control over the blocking
+%% behavior of the running processes, and one can simulate more advanced sessions
+%% easily by breaking them up in the right way.
 %%
-%% The task can be described entirely by ?BLOCK/?UNBLOCK rules in the _callout/2 sections
-%% of the commands.
+%% Simple analysis of the model state determines when a process will block or not,
+%% by looking at the representation of how many processes are asking and how many
+%% are doing work and how many tokens we have left. This analysis is adopted from
+%% an older model of what to do, but it turns out we can simplify the state analysis
+%% by a lot since pattern matches runs in sequence.
 %%
-%% The remarkable result is an extremely simple model on one hand, but with a lot of power.
-%% The simple specification provides a complete randomized run–time harness around the
-%% SafetyValve system and checks it for correctness.
+%% The session can be described entirely by ?BLOCK/?UNBLOCK rules in the _callout/2
+%% sections of the commands. Analysis of the ?BLOCK result allows us to discriminate
+%% errornous exits from formally correct ones.
+%%
+%% The model verifies correctness by calculating expected return values from the model
+%% and then uses a single postcondition_common/3 for handling all postconditions.
+%%
+%% The remarkable result is an extremely simple model on one hand, but with a lot
+%% of power.
+%%
+%% The simple specification provides a complete randomized run–time harness around
+%% the SafetyValve system and checks it for correctness.
 -module(svq).
 -compile([export_all]).
 
