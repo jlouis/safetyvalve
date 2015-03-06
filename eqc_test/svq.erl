@@ -91,9 +91,11 @@ task_callouts(#state { asking = As, max_asking = MaxA } = S, []) ->
             ?RET(R)
         end;
       true ->
-        ?APPLY(await_task, []),
-        ?MATCH(R, ?APPLY(run_task, [])),
-        ?RET(R)
+        ?MATCH(A, ?APPLY(await_task, [])),
+        case A of
+            ok -> ?MATCH(R, ?APPLY(run_task, [])), ?RET(R);
+            X -> ?RET(X)
+        end
     end.
     
 task_features(#state {
@@ -139,18 +141,32 @@ done_callouts(_S, [Pid]) ->
 %% ----------------------------------------------------------------------
 
 kill_work(Pid) ->
-    true = exit(Pid, killed),
-    ok.
+    exit(Pid, killed).
+
+kill_work_pre(#state { working = Ws }) -> Ws /= [].
     
 kill_work_args(#state { working = Workers }) ->
     [elements(Workers)].
     
-kill_work_pre(#state { working = Ws }) -> Ws /= [].
-
 kill_work_callouts(_S, [Pid]) ->
     ?UNBLOCK(Pid, killed),
     ?APPLY(unblock, []),
-    ?RET(ok).
+    ?RET(true).
+
+%% KILLING AN AWAITING PROCESS
+%% ----------------------------------------------------------------------
+kill_asking(Pid) ->
+    exit(Pid, killed).
+    
+kill_asking_pre(#state { asking = As }) -> As /= [].
+
+kill_asking_args(#state { asking = As }) ->
+    [elements(As)].
+
+kill_asking_callouts(_S, [Pid]) ->
+    ?UNBLOCK(Pid, killed),
+    ?RET(true).
+    
 
 %% REPLENISHING TOKENS
 %% ---------------------------------------------------------------------
@@ -199,7 +215,7 @@ add_working_next(S, _V, [Pid]) ->
 add_working_callouts(#state { tokens = Tokens }, [_Pid]) when Tokens > 0 ->
     ?EMPTY;
 add_working_callouts(#state { }, [_Pid])  ->
-    ?FAIL("Model failure, out of tokens, but adding work").
+    ?FAIL(no_tokens_but_adding_work).
 
 del_working_next(S, _V, [Pid]) ->
     S#state { working = S#state.working -- [Pid] }.
@@ -209,8 +225,12 @@ add_tokens_next(#state { tokens = Tokens, max_tokens = MaxT } = S, _V, [Rate]) -
 
 await_task_callouts(_S, []) ->
     ?APPLY(add_asking, [?SELF]),
-    ?BLOCK,
-    ?APPLY(del_asking, [?SELF]).
+    ?MATCH(Res, ?BLOCK),
+    ?APPLY(del_asking, [?SELF]),
+    case Res of
+        ok -> ?RET(ok);
+        killed -> ?RET(?EXCEPTION(killed))
+    end.
 
 run_task_callouts(_S, []) ->
     ?APPLY(add_working, [?SELF]),
