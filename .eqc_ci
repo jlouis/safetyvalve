@@ -1,4 +1,4 @@
 {build, "make eqc-ci"}.
-{deps, "deps/goldrush/ebin"}.
-{deps, "deps/lager/ebin"}.
+{deps, "../deps/goldrush/ebin"}.
+{deps, "../deps/lager/ebin"}.
 
