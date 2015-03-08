@@ -18,7 +18,7 @@ See the document USING.md for a usage example.
 
 # Changes
 
-### v2.3.1 -> v2.4.0
+### v2.4.0
 
 This release changes some important internals inside SV. There is a tracking table of the processes we are currently doing work for. This table was a `gb_set` but it has been changed to an (unnamed) ETS table. This means each queue now takes two ETS tables to operate if you run with the default queue settings. If your system has many ETS tables, this may be a problem.
 
@@ -27,28 +27,28 @@ a process currently being queued is killed, then the system correctly removes th
 
 The larger rationale for the change is to allow for more advanced schemes of queueing in the future. One can imagine queueing without blocking and then aborting the queueing operation by cancelling it toward the queue for instance.
 
-### v2.3.0 -> v2.3.1
+### v2.3.1
 
 Introduce release 17.0 as a supported architecture. Update the lager dependency.
 
-### v2.2.0 -> v2.3.0
+### v2.3.0
 
 Add explicit calls to `sv:ask/2` and `sv:done/3`. These calls allows one to run resource acquisition and release in different scopes. While this is slighty dangerous, there are places where one needs exactly this behaviour in systems.
 
-### v2.1.0 -> v2.2.0
+### v2.2.0
 
 Allow to pass parameters to queue algorithms. In particular, use this to provide parameters to the CoDel
 classifier. Change should be fully backwards compatible.
 
-### v2.0.0 -> v2.1.0
+### v2.1.0
 
 Enable a new configuration parameter, `queue_type`. This parameter defines a module which handles the queueing strategy used by the system. In short, queues are now plugable. If omitted, the queue defaults to `sv_queue_ets` which is an ETS-based queueing strategy. Hence, the minor version bump as it should not affect any users and be fully backwards compatible.
 
-### v1.0.0 -> v2.0.0
+### v2.0.0
 
 Remove `sv:run/3` and replace it with `sv:run/2` for now. The return value is still changed according to the changes in v1.0.0. This change is done to hide certain internal structure for now until we get it fleshed out more. It also enables us to do more advanced queueing strategies.
 
-### v0.1.0 -> v1.0.0
+### v1.0.0
 
 The return value of `sv:run/3` changed from `Res | {error, Reason}` to `{ok, Res} | {error, Reason}`. This better reflects the system and we can distinguish between an error term from the function we run and safetyvalve itself.
 
