@@ -108,7 +108,7 @@ init([Conf]) ->
     set_timer(Conf),
     QT = Conf#conf.queue_type,
     QArgs = Conf#conf.queue_args,
-    TID = ets:new(tasks, [protected]),
+    TID = ets:new(tasks, [protected, set]),
     {ok, #state{ conf = Conf,
                  queue = apply(QT, new, QArgs),
                  tokens = Conf#conf.token_limit,
@@ -125,27 +125,31 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 			tasks = TID,
 			task_count = TC } = State) when K > 0 ->
     %% Let the guy run, since we have excess tokens:
+    Ref = erlang:monitor(process, Pid),
     case analyze_tasks(TC, Conf) of
         concurrency_full ->
-            case enqueue(From, Timestamp, Q, Conf) of
+            case enqueue({From, Ref}, Timestamp, Q, Conf) of
                 {ok, NQ} ->
+                    true = ets:insert_new(TID, {Ref, {queueing, {From, Ref}, Timestamp}}),
                     {noreply, State#state { queue = NQ}};
                 queue_full ->
                     {reply, {error, queue_full}, State}
             end;
         {go, _K} ->
-            Ref = erlang:monitor(process, Pid),
             true = ets:insert_new(TID, {Ref, working}),
             {reply, {go, Ref}, State#state { tokens = K-1, task_count = TC+1}}
     end;
-handle_call({ask, Timestamp}, From,
+handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 	#state {
 		tokens = 0,
 		conf = Conf,
-		queue = Q } = State) ->
+		queue = Q,
+		tasks = TID } = State) ->
     %% No more tokens, queue the guy
-    case enqueue(From, Timestamp, Q, Conf) of
+    Ref = erlang:monitor(process, Pid),
+    case enqueue({From, Ref}, Timestamp, Q, Conf) of
         {ok, NQ} ->
+            true = ets:insert_new(TID, {Ref, {queueing, {From, Ref}, Timestamp}}),
             {noreply, State#state { queue = NQ } };
         queue_full ->
             {reply, {error, queue_full}, State}
@@ -164,11 +168,22 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% @private
-handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TID, task_count = TC } = State) ->
+handle_info({'DOWN', Ref, _, _, _}, #state {
+	tasks = TID,
+	task_count = TC,
+	queue = Q,
+	conf = #conf { queue_type = QT } } = State) ->
     Now = sv:timestamp(),
-    true = ets:delete(TID, Ref),
-    NewState = process_queue(Now, State#state { task_count = TC - 1}),
-    {noreply, NewState};
+    NewState = case ets:lookup_element(TID, Ref, 2) of
+        working ->
+            true = ets:delete(TID, Ref),
+            State#state { task_count = TC - 1};
+        {queued, Item, TS} ->
+            true = ets:delete(TID, Ref),
+            NQ = QT:delete(Item, TS, Q),
+            State#state { queue = NQ }
+    end,
+    {noreply, process_queue(Now, NewState)};
 handle_info({replenish, TS}, State) ->
     NewState = process_queue(TS, refill_tokens(State)),
     {noreply, NewState};
@@ -213,11 +228,10 @@ process_queue(Now, K, Q, QT, TID, Started) ->
         {drop, Dropped, Q2} ->
             drop(Dropped),
             process_queue(Now, K, Q2, QT, TID, Started);
-        {{Pid, _} = From, Dropped, Q2} ->
+        { {From, Ref}, Dropped, Q2} ->
             drop(Dropped),
-            Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
-            true = ets:insert_new(TID, {Ref, working}),
+            true = ets:insert(TID, {Ref, working}),
             process_queue(Now, K-1, Q2, QT, TID, Started+1);
         {empty, Dropped, Q2} ->
             drop(Dropped),
@@ -249,5 +263,8 @@ set_timer(#conf { hz = Hz }) ->
     erlang:send_after(Hz, self(), replenish).
 
 drop(Tasks) ->
-    [gen_server:reply(F, {error, overload}) || F <- Tasks],
+    [begin
+        erlang:demonitor(Ref, [flush]),
+        gen_server:reply(From, {error, overload})
+     end || {From, Ref} <- Tasks],
     ok.
