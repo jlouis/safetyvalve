@@ -107,10 +107,11 @@ init([Conf]) ->
     set_timer(Conf),
     QT = Conf#conf.queue_type,
     QArgs = Conf#conf.queue_args,
+    TID = ets:new(tasks, [protected]),
     {ok, #state{ conf = Conf,
                  queue = apply(QT, new, QArgs),
                  tokens = Conf#conf.token_limit,
-                 tasks = gb_sets:empty() }}.
+                 tasks = TID }}.
 
 %% @private
 handle_call({q, tokens}, _, #state { tokens = K } = State) ->
@@ -120,9 +121,9 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 		 	tokens = K,
 			conf = Conf,
 			queue = Q,
-			tasks = Tasks } = State) when K > 0 ->
+			tasks = TID } = State) when K > 0 ->
     %% Let the guy run, since we have excess tokens:
-    case analyze_tasks(Tasks, Conf) of
+    case analyze_tasks(TID, Conf) of
         concurrency_full ->
             case enqueue(From, Timestamp, Q, Conf) of
                 {ok, NQ} ->
@@ -132,8 +133,8 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
             end;
         {go, _K} ->
             Ref = erlang:monitor(process, Pid),
-            {reply, {go, Ref}, State#state { tokens = K-1,
-                                             tasks  = gb_sets:add_element(Ref, Tasks) }}
+            true = ets:insert_new(TID, {Ref, working}),
+            {reply, {go, Ref}, State#state { tokens = K-1}}
     end;
 handle_call({ask, Timestamp}, From,
 	#state {
@@ -147,10 +148,10 @@ handle_call({ask, Timestamp}, From,
         queue_full ->
             {reply, {error, queue_full}, State}
     end;
-handle_call({done, Now, Ref}, _From, #state { tasks = Tasks } = State) ->
+handle_call({done, Now, Ref}, _From, #state { tasks = TID } = State) ->
     true = erlang:demonitor(Ref),
-    NewState = State#state { tasks = gb_sets:del_element(Ref, Tasks) },
-    {reply, ok, process_queue(Now, NewState) };
+    true = ets:delete(TID, Ref),
+    {reply, ok, process_queue(Now, State) };
 handle_call(Request, _From, State) ->
     lager:error("Unknown call request: ~p", [Request]),
     Reply = ok,
@@ -161,9 +162,10 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% @private
-handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TS } = State) ->
+handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TID } = State) ->
     Now = sv:timestamp(),
-    NewState = process_queue(Now, State#state { tasks = gb_sets:del_element(Ref, TS) }),
+    true = ets:delete(TID, Ref),
+    NewState = process_queue(Now, State),
     {noreply, NewState};
 handle_info({replenish, TS}, State) ->
     NewState = process_queue(TS, refill_tokens(State)),
@@ -188,35 +190,36 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% @doc Try to use up tokens for queued items
 %% @end
-process_queue(Now, #state { queue = Q, tokens = K, tasks = Ts, conf = Conf } = State) ->
-    case analyze_tasks(Ts, Conf) of
+process_queue(Now, #state { queue = Q, tokens = K, tasks = TID, conf = Conf } = State) ->
+    case analyze_tasks(TID, Conf) of
         concurrency_full ->
             State;
         {go, RemainingConc} ->
             ToStart = min(RemainingConc, K),
             QT = Conf#conf.queue_type,
-            {Started, NQ, NTs} = process_queue(Now, ToStart, Q, QT, Ts),
-            State#state { queue = NQ, tokens = K - Started, tasks = NTs }
+            {Started, NQ} = process_queue(Now, ToStart, Q, QT, TID),
+            State#state { queue = NQ, tokens = K - Started}
     end.
 
-process_queue(Now, Rem, Q, QT, TS) ->
-    process_queue(Now, Rem, Q, QT, TS, 0).
+process_queue(Now, Rem, Q, QT, TID) ->
+    process_queue(Now, Rem, Q, QT, TID, 0).
 
-process_queue(_Now, 0, Q, _QT, TS, Started) ->
-    {Started, Q, TS};
-process_queue(Now, K, Q, QT, TS, Started) ->
+process_queue(_Now, 0, Q, _QT, _TID, Started) ->
+    {Started, Q};
+process_queue(Now, K, Q, QT, TID, Started) ->
     case QT:out(Now, Q) of
         {drop, Dropped, Q2} ->
             drop(Dropped),
-            process_queue(Now, K, Q2, QT, TS, Started);
+            process_queue(Now, K, Q2, QT, TID, Started);
         {{Pid, _} = From, Dropped, Q2} ->
             drop(Dropped),
             Ref = erlang:monitor(process, Pid),
             gen_server:reply(From, {go, Ref}),
-            process_queue(Now, K-1, Q2, QT, gb_sets:add_element(Ref, TS), Started+1);
+            true = ets:insert_new(TID, {Ref, working}),
+            process_queue(Now, K-1, Q2, QT, TID, Started+1);
         {empty, Dropped, Q2} ->
             drop(Dropped),
-            {Started, Q2, TS}
+            {Started, Q2}
     end.
 
 enqueue(Term, Timestamp, Q, #conf { size = Sz, queue_type = QT } ) ->
@@ -228,8 +231,8 @@ enqueue(Term, Timestamp, Q, #conf { size = Sz, queue_type = QT } ) ->
     end.
 
 %% @doc Analyze tasks to see if we are close to the limit
-analyze_tasks(Tasks, #conf { concurrency = Limit }) ->
-    case gb_sets:size(Tasks) of
+analyze_tasks(TID, #conf { concurrency = Limit }) ->
+    case ets:info(TID, size) of
         K when K < Limit ->
             {go, Limit - K};
         K when K == Limit ->
