@@ -55,7 +55,8 @@
           %% the currently executing tasks. It is used to make sure
           %% that we maintain the concurrency limit correctly if tasks
           %% crash. Also keeps track of the current task concurrency value
-          tasks }).
+          tasks,
+          task_count = 0 }).
 
 %%%===================================================================
 %%% API
@@ -121,9 +122,10 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 		 	tokens = K,
 			conf = Conf,
 			queue = Q,
-			tasks = TID } = State) when K > 0 ->
+			tasks = TID,
+			task_count = TC } = State) when K > 0 ->
     %% Let the guy run, since we have excess tokens:
-    case analyze_tasks(TID, Conf) of
+    case analyze_tasks(TC, Conf) of
         concurrency_full ->
             case enqueue(From, Timestamp, Q, Conf) of
                 {ok, NQ} ->
@@ -134,7 +136,7 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
         {go, _K} ->
             Ref = erlang:monitor(process, Pid),
             true = ets:insert_new(TID, {Ref, working}),
-            {reply, {go, Ref}, State#state { tokens = K-1}}
+            {reply, {go, Ref}, State#state { tokens = K-1, task_count = TC+1}}
     end;
 handle_call({ask, Timestamp}, From,
 	#state {
@@ -148,10 +150,10 @@ handle_call({ask, Timestamp}, From,
         queue_full ->
             {reply, {error, queue_full}, State}
     end;
-handle_call({done, Now, Ref}, _From, #state { tasks = TID } = State) ->
+handle_call({done, Now, Ref}, _From, #state { tasks = TID, task_count = TC } = State) ->
     true = erlang:demonitor(Ref),
     true = ets:delete(TID, Ref),
-    {reply, ok, process_queue(Now, State) };
+    {reply, ok, process_queue(Now, State#state { task_count = TC - 1}) };
 handle_call(Request, _From, State) ->
     lager:error("Unknown call request: ~p", [Request]),
     Reply = ok,
@@ -162,10 +164,10 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% @private
-handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TID } = State) ->
+handle_info({'DOWN', Ref, _, _, _}, #state { tasks = TID, task_count = TC } = State) ->
     Now = sv:timestamp(),
     true = ets:delete(TID, Ref),
-    NewState = process_queue(Now, State),
+    NewState = process_queue(Now, State#state { task_count = TC - 1}),
     {noreply, NewState};
 handle_info({replenish, TS}, State) ->
     NewState = process_queue(TS, refill_tokens(State)),
@@ -190,15 +192,15 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% @doc Try to use up tokens for queued items
 %% @end
-process_queue(Now, #state { queue = Q, tokens = K, tasks = TID, conf = Conf } = State) ->
-    case analyze_tasks(TID, Conf) of
+process_queue(Now, #state { queue = Q, tokens = K, tasks = TID, conf = Conf, task_count = TC } = State) ->
+    case analyze_tasks(TC, Conf) of
         concurrency_full ->
             State;
         {go, RemainingConc} ->
             ToStart = min(RemainingConc, K),
             QT = Conf#conf.queue_type,
             {Started, NQ} = process_queue(Now, ToStart, Q, QT, TID),
-            State#state { queue = NQ, tokens = K - Started}
+            State#state { queue = NQ, tokens = K - Started, task_count = TC + Started}
     end.
 
 process_queue(Now, Rem, Q, QT, TID) ->
@@ -231,13 +233,8 @@ enqueue(Term, Timestamp, Q, #conf { size = Sz, queue_type = QT } ) ->
     end.
 
 %% @doc Analyze tasks to see if we are close to the limit
-analyze_tasks(TID, #conf { concurrency = Limit }) ->
-    case ets:info(TID, size) of
-        K when K < Limit ->
-            {go, Limit - K};
-        K when K == Limit ->
-            concurrency_full
-    end.
+analyze_tasks(TC, #conf { concurrency = Limit }) when TC < Limit -> {go, Limit - TC};
+analyze_tasks(TC, #conf { concurrency = Limit }) when TC == Limit -> concurrency_full.
 
 %% @doc Refill the tokens in the bucket
 %% @end
