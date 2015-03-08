@@ -12,7 +12,7 @@
 -module(sv_codel).
 
 %% Public API
--export([new/0, new/2, in/3, out/2, len/1]).
+-export([new/0, new/2, in/3, out/2, len/1, remove/3]).
 -export([init/2, enqueue/3, dequeue/2, delete/1]).
 
 %% Scrutiny
@@ -84,6 +84,9 @@ in(Item, Ts, CoDelState) ->
 out(Ts, CoDelState) ->
    dequeue(Ts, CoDelState).
 
+remove(Item, TS, CoDelState) ->
+    queue_remove(Item, TS, CoDelState).
+
 %% @doc Initialize the CoDel state
 %% <p>The value `Target' defines the delay target in ms. If the queue has a sojourn-time through the queue
 %% which is above this value, then the queue begins to consider dropping packets.</p>
@@ -107,6 +110,11 @@ delete(#state { queue = Q }) -> ?Q:delete(Q).
 -spec enqueue(task(), term(), #state{}) -> #state{}.
 enqueue(Pkt, TS, #state { queue = Q } = State) ->
   State#state { queue = ?Q:in({Pkt, TS}, TS, Q) }.
+
+%% @doc queue_remove/3 removes a packet from the queue
+%% @end
+queue_remove(Item, TS, #state { queue = Q } = State) ->
+    State#state { queue = ?Q:remove(Item, TS, Q) }.
 
 %% @doc Dequeue a packet from the CoDel system
 %% Given a point in time, `Now' and a CoDel `State', extract the next task from it.

@@ -24,26 +24,30 @@
 
 -export([new/0, delete/1]).
 
--export([out/2, len/1, in/3]).
+-export([out/2, len/1, in/3, remove/3]).
 
 new() ->
-	ets:new(queue, [protected, ordered_set]).
+    ets:new(queue, [protected, ordered_set]).
 	
 delete(Q) -> ets:delete(Q).
 
 out(_Ts, QName) ->
-	case ets:first(QName) of
-		'$end_of_table' -> {empty, [], QName};
-		Key ->
-			[{_T, E} = Obj] = ets:lookup(QName, Key),
-			true = ets:delete_object(QName, Obj),
-			{E, [], QName}
-	end.
+    case ets:first(QName) of
+        '$end_of_table' -> {empty, [], QName};
+            Key ->
+            [{_T, E} = Obj] = ets:lookup(QName, Key),
+            true = ets:delete_object(QName, Obj),
+            {E, [], QName}
+    end.
 	
 len(QName) ->
-	ets:info(QName, size).
+    ets:info(QName, size).
 	
 %% Format is kept like this to make sure it follows that of the `queue' module.
-in(Item, Ts, QName) ->
-	true = ets:insert_new(QName, {Ts, Item}),
-	QName.
+in(Item, TS, QName) ->
+    true = ets:insert_new(QName, {TS, Item}),
+    QName.
+
+remove(Item, TS, QName) ->
+    true = ets:delete_object(QName, {TS, Item}),
+    QName.
