@@ -178,9 +178,9 @@ handle_info({'DOWN', Ref, _, _, _}, #state {
         working ->
             true = ets:delete(TID, Ref),
             State#state { task_count = TC - 1};
-        {queued, Item, TS} ->
+        {queueing, Item, TS} ->
             true = ets:delete(TID, Ref),
-            NQ = QT:delete(Item, TS, Q),
+            NQ = QT:remove(Item, TS, Q),
             State#state { queue = NQ }
     end,
     {noreply, process_queue(Now, NewState)};
