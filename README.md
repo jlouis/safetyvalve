@@ -18,6 +18,15 @@ See the document USING.md for a usage example.
 
 # Changes
 
+### v2.3.1 -> v2.4.0
+
+This release changes some important internals inside SV. There is a tracking table of the processes we are currently doing work for. This table was a `gb_set` but it has been changed to an (unnamed) ETS table. This means each queue now takes two ETS tables to operate if you run with the default queue settings. If your system has many ETS tables, this may be a problem.
+
+Secondly, the queue now correctly monitors a process over its full lifetime. This means that if
+a process currently being queued is killed, then the system correctly removes that process from the queue. The old behavior was to keep the process queued and make it count against the normal processing, consuming a token. A dead process won't consume tokens with this change.
+
+The larger rationale for the change is to allow for more advanced schemes of queueing in the future. One can imagine queueing without blocking and then aborting the queueing operation by cancelling it toward the queue for instance.
+
 ### v2.3.0 -> v2.3.1
 
 Introduce release 17.0 as a supported architecture. Update the lager dependency.
