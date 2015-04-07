@@ -1,9 +1,33 @@
 -module(sv).
 
--export([timestamp/0, ask/2, done/3]).
+-export([timestamp/0, new/1, new/2, destroy/1, ask/2, done/3]).
 -export([run/2]).
 %% Internal API
 -export([report/2]).
+
+%% @doc Creates a new queue
+%% @end
+-spec new(Conf) -> {ok, pid()}
+    when
+      Conf :: proplists:proplist().
+new(Conf) ->
+  new(undefined, Conf).
+
+-spec new(Queue, Conf) -> {ok, pid()}
+    when
+      Queue :: undefined | atom(),
+      Conf :: proplists:proplist().
+new(Queue, Conf) ->
+    {ok, Pid} = safetyvalve_sup:start_queue(Queue, Conf),
+    {ok, Pid}.
+
+%% @doc Destroys a previously created queue
+%% @end
+-spec destroy(Queue) -> ok | {error, not_found | simple_one_for_one}
+    when
+      Queue :: undefined | atom().
+destroy(Queue) ->
+    safetyvalve_sup:stop_queue(Queue).
 
 %% @doc Enqueue a job on a queue
 %% <p>Try to run `Fun' on queue `Name'. The `Fun' is run at time `TP'.
@@ -16,7 +40,7 @@
 
 -spec run(Name, Fun) -> {ok, Result} | {error, Reason}
     when
-      Name :: atom(),
+      Name :: atom() | pid(),
       Fun :: fun (() -> term),
       Result :: term(),
       Reason :: term().
@@ -25,7 +49,7 @@ run(Name, Fun) ->
     case sv_queue:ask(Name, StartPoint) of
         {go, Ref} ->
             Res = Fun(),
-            EndPoint = timestamp(), 
+            EndPoint = timestamp(),
             sv_queue:done(Name, Ref, EndPoint),
             {ok, Res};
         {error, Reason} ->
@@ -44,13 +68,13 @@ run(Name, Fun) ->
 %% @end
 -spec ask(Queue, T) -> {go, Ref} | {error, Reason}
   when
-    Queue :: atom(),
+    Queue :: atom() | pid(),
     T :: integer(),
     Ref :: term(), % Opaque
     Reason :: term().
 ask(QN, T) ->
   sv_queue:ask(QN, T).
-  
+
 %% @doc done/3 relinquishes a resource yet again to the queue
 %% <p>Call this function when you are done with using a resource. @see ask/2 for the
 %% documentation of how to invoke this function.</p>
@@ -74,4 +98,3 @@ timestamp() ->
 	%% {os:timestamp(), self()} or {os:timestamp(), ref()}.
 	{Mega, Secs, Micro} = erlang:now(),
 	(Mega * 1000000 + Secs) * 1000000 + Micro.
-

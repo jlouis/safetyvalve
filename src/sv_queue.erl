@@ -34,23 +34,25 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 -record(conf, { hz, rate, token_limit, size, concurrency, queue_type, queue_args }).
+-type conf() :: #conf{}.
+
 -record(state, {
           %% Conf is the configuration object this queue is configured
           %% with. It is a place to query about conf options
           conf,
-          
+
           %% Queue reference to the queue we have of workers that are
           %% waiting to be allowed to execute. Also maintains the
           %% current queue size.
           queue,
-          
+
           %% Tokens is a counter of how many tokens that are in the
           %% Token Bucket Regulator right now.
           tokens,
-          
+
           %% Tasks is a set which contains the monitor references on
           %% the currently executing tasks. It is used to make sure
           %% that we maintain the concurrency limit correctly if tasks
@@ -63,11 +65,14 @@
 %%%===================================================================
 
 %% @doc
-%% Starts the server
+%% Starts the server, can either be registered or not
 %% @end
+start_link(undefined, Conf) ->
+    gen_server:start_link(?MODULE, Conf, []);
 start_link(Name, Conf) ->
-    gen_server:start_link({local, Name}, ?MODULE, [Conf], []).
+    gen_server:start_link({local, Name}, ?MODULE, Conf, []).
 
+-spec parse_configuration(proplists:proplist()) -> conf().
 parse_configuration(Conf) ->
     {QueueType, QueueArgs} =
         case proplists:get_value(queue_type, Conf, sv_queue_ets) of
@@ -90,7 +95,6 @@ ask(Name) ->
 ask(Name, Timestamp) ->
     gen_server:call(Name, {ask, Timestamp}, infinity).
 
-
 done(Name, Ref, Timestamp) ->
     gen_server:call(Name, {done, Timestamp, Ref}, infinity).
 
@@ -104,7 +108,7 @@ q(Name, Atom) ->
 %%%===================================================================
 
 %% @private
-init([Conf]) ->
+init(Conf) ->
     set_timer(Conf),
     QT = Conf#conf.queue_type,
     QArgs = Conf#conf.queue_args,
@@ -117,6 +121,8 @@ init([Conf]) ->
 %% @private
 handle_call({q, tokens}, _, #state { tokens = K } = State) ->
     {reply, K, State};
+handle_call({q, configuration}, _, #state { conf = Conf } = State) ->
+    {reply, Conf, State};
 handle_call({ask, Timestamp}, {Pid, _Tag} = From,
 		 #state {
 		 	tokens = K,
