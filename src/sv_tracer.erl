@@ -21,13 +21,13 @@ write_event({trace, _Pid, call, {sv, report, [Now, {dodequeue, QSize, Sojourn}]}
 
 %% Callbacks
 init([Filename]) ->
-	{ok, Fd} = file:open(Filename, [write, binary, delayed_write]),
-	file:write(Fd, header()),
-	T = sv:timestamp(),
-         {ok, Tracer} = dbg:tracer(process, {fun write_event/2, {T div 1000, Fd}}),
-         dbg:p(all, [c]),
-         dbg:tp(sv, report, 2, c),
-	{ok, #state { fd = Fd,  tracer = Tracer}}.
+    {ok, Fd} = file:open(Filename, [write, binary, delayed_write]),
+    file:write(Fd, header()),
+    {TS, _} = sv:timestamp(),
+    {ok, Tracer} = dbg:tracer(process, {fun write_event/2, {TS div 1000, Fd}}),
+    dbg:p(all, [c]),
+    dbg:tp(sv, report, 2, c),
+    {ok, #state { fd = Fd,  tracer = Tracer}}.
 	
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.

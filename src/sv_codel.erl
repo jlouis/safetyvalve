@@ -140,29 +140,33 @@ control_law(T, I, C) ->
 
 %% This is a helper function. It dequeues from the underlying queue and then analyzes the Sojourn
 %% time together with the next function, dodequeue_.
-dodequeue(Now, #state { queue = Q } = State) ->
+dodequeue({TS, _Uniq} = Now, #state { queue = Q } = State) ->
   case ?Q:out(Now, Q) of
     {empty, [], NQ} ->
-      sv:report(Now div 1000, {dodequeue, 0, 0}),
+      sv:report(TS div 1000, {dodequeue, 0, 0}),
       {nodrop, empty, State#state { first_above_time = 0, queue = NQ }};
-    {{Pkt, InT}, [], NQ} ->
-      Sojourn = Now - InT,
+    {{Pkt, {InT, _}}, [], NQ} ->
+      Sojourn = TS - InT,
       
-      sv:report(Now div 1000, {dodequeue, ?Q:len(NQ), Sojourn div 1000}),
+      sv:report(TS div 1000, {dodequeue, ?Q:len(NQ), Sojourn div 1000}),
       dodequeue_(Now, Pkt, Sojourn, State#state { queue = NQ })
   end.
 
 %% Case split:
-%% The sojourn time through the queue is less than our target value. Thus, we should not drop, and
-%% we reset when we were first above.
-dodequeue_(_Now, Pkt, Sojourn, #state { target = T } = State) when Sojourn < T ->
+%% The sojourn time through the queue is less than our target value.
+%% Thus, we should not drop, and we reset when we were first above.
+dodequeue_(_Now, Pkt, Sojourn, #state { target = T } = State)
+	when Sojourn < T ->
     {nodrop, Pkt, State#state { first_above_time = 0 }};
-%% We are above target, but this is the first time we are above target. We set up the point in time when
-%% we went above the target to start tracking this.
-dodequeue_(Now, Pkt, _Sojourn, #state { first_above_time = FAT, interval = I } = State) when FAT == 0 ->
-    {nodrop, Pkt, State#state { first_above_time = Now + I }};
+%% We are above target, but this is the first time we are above target.
+%% We set up the point in time when we went above the target to start
+%% tracking this.
+dodequeue_({TS, _}, Pkt, _Sojourn, #state { first_above_time = FAT, interval = I } = State)
+	when FAT == 0 ->
+    {nodrop, Pkt, State#state { first_above_time = TS + I }};
 %% We have been above target for more than one interval. This is when we need to start dropping.
-dodequeue_(Now, Pkt, _Sojourn, #state { first_above_time = FAT } = State) when Now >= FAT ->
+dodequeue_({TS, _}, Pkt, _Sojourn, #state { first_above_time = FAT } = State)
+	when TS >= FAT ->
     {drop, Pkt, State};
 %% We are above target, but we have not yet been above target for a complete interval. Wait and see
 %% what happens, but don't begin dropping packets just yet.
@@ -185,10 +189,12 @@ dequeue_(Now, {drop, Pkt, #state { dropping = false } = State}) ->
 dequeue_(_Now, {nodrop, Pkt, #state { dropping = false } = State}) ->
     {Pkt, [], State}.
 
-%% Consider dropping the next packet from the queue. This function drives a loop until the next timepoint
-%% where we should drop is in the future. The helper dequeue_drop_next_/3 carries out the book-keeping
-dequeue_drop_next(Now, Pkt, #state { drop_next = DN, dropping = true } = State, Dropped)
-        when Now >= DN ->
+%% Consider dropping the next packet from the queue.
+%% This function drives a loop until the next timepoint
+%% where we should drop is in the future. The helper
+%% dequeue_drop_next_/3 carries out the book-keeping
+dequeue_drop_next({TS, _} = Now, Pkt, #state { drop_next = DN, dropping = true } = State, Dropped)
+        when TS >= DN ->
     dequeue_drop_next_(Now, dodequeue(Now, State), [Pkt | Dropped]);
 dequeue_drop_next(_Now, Pkt, State, Dropped) ->
     {Pkt, Dropped, State}.
@@ -196,29 +202,31 @@ dequeue_drop_next(_Now, Pkt, State, Dropped) ->
 %% If the Sojourn time improves, we leave the dropping state.
 dequeue_drop_next_(Now, {nodrop, Pkt, State}, Dropped) ->
     dequeue_drop_next(Now, Pkt, State#state { dropping = false }, Dropped);
-%% We are still to drop packets, so update the count and the control law for the next loop round.
+%% We are still to drop packets, so update the count and the
+%% control law for the next loop round.
 dequeue_drop_next_(
 	Now,
-	{drop, Pkt, #state { count = C, interval = I, drop_next = DN }  = State},
+	{drop, Pkt,
+	    #state {
+	        count = C,
+	        interval = I,
+	        drop_next = DN }  = State},
 	Dropped) ->
-    dequeue_drop_next(
-    	Now,
-    	Pkt,
-    	State#state { count = C + 1, drop_next = control_law(DN, I, C + 1) },
-    	Dropped).
+    NewState = State#state { count = C + 1, drop_next = control_law(DN, I, C+1) },
+    dequeue_drop_next(Now, Pkt, NewState, Dropped).
 
 %% Function for setting up the dropping state. When we start dropping, we evaluate a bit on
 %% how long ago we last dropped. If we did this recently, we do not start off from the bottom of
 %% the control law, but rather pick a point a bit up the function. On the other hand, if it is a long time
 %% ago, we just pick the usual starting point of 1.
-dequeue_start_drop(Now, Pkt, #state { drop_next = DN, interval = Interval, count = Count } = State)
-	when Now - DN < Interval, Count > 2 ->
+dequeue_start_drop({TS, _}, Pkt, #state { drop_next = DN, interval = Interval, count = Count } = State)
+	when TS - DN < Interval, Count > 2 ->
     {drop, [Pkt], State#state {
     	dropping = true,
     	count = Count - 2,
-    	drop_next = control_law(Now, Interval, Count - 2) }};
-dequeue_start_drop(Now, Pkt, #state { interval = I } = State) ->
+    	drop_next = control_law(TS, Interval, Count - 2) }};
+dequeue_start_drop({TS, _}, Pkt, #state { interval = I } = State) ->
     {drop, [Pkt], State#state {
     	dropping = true,
     	count = 1,
-    	drop_next = control_law(Now, I, 1) }}.
+    	drop_next = control_law(TS, I, 1) }}.

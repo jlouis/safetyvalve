@@ -91,10 +91,12 @@ report(_T, _Event) ->
     hopefully_traced.
 
 %% @doc Construct a timestamp in a canonical way for Safetyvalve.
--spec timestamp() -> integer().
+%% The important rule here is that timestamps are used as unique time
+%% representations, which in turn means we have to create a timestamp
+%% and latch on a unique integer.
+%% @end
+-spec timestamp() -> {integer(), integer()}.
 timestamp() ->
-	%% Timestamps *have* to be unique. Calling erlang:now/0 makes sure
-	%% this happens. But you can use any ordered term if you want, for instance
-	%% {os:timestamp(), self()} or {os:timestamp(), ref()}.
-	{Mega, Secs, Micro} = erlang:now(),
-	(Mega * 1000000 + Secs) * 1000000 + Micro.
+	T = sv_time:monotonic_time(micro_seconds),
+	U = sv_time:unique_integer(),
+	{T, U}.
