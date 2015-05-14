@@ -1,2 +1,3 @@
 all:
-	$(MAKE) -C .. all
+	$(MAKE) -C .. rebar3-compile
+
