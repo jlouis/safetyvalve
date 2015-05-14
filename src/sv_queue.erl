@@ -136,13 +136,14 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
         concurrency_full ->
             case enqueue({From, Ref}, Timestamp, Q, Conf) of
                 {ok, NQ} ->
-                    true = ets:insert_new(TID, {Ref, {queueing, {From, Ref}, Timestamp}}),
+                    ok = track_process(TID, Ref, {queueing, {From, Ref}, Timestamp}),
                     {noreply, State#state { queue = NQ}};
                 queue_full ->
+                    erlang:demonitor(Ref, [flush]),
                     {reply, {error, queue_full}, State}
             end;
         {go, _K} ->
-            true = ets:insert_new(TID, {Ref, working}),
+            ok = track_process(TID, Ref, working),
             {reply, {go, Ref}, State#state { tokens = K-1, task_count = TC+1}}
     end;
 handle_call({ask, Timestamp}, {Pid, _Tag} = From,
@@ -155,19 +156,20 @@ handle_call({ask, Timestamp}, {Pid, _Tag} = From,
     Ref = erlang:monitor(process, Pid),
     case enqueue({From, Ref}, Timestamp, Q, Conf) of
         {ok, NQ} ->
-            true = ets:insert_new(TID, {Ref, {queueing, {From, Ref}, Timestamp}}),
+            ok = track_process(TID, Ref, {queueing, {From, Ref}, Timestamp}),
             {noreply, State#state { queue = NQ } };
         queue_full ->
+            erlang:demonitor(Ref, [flush]),
             {reply, {error, queue_full}, State}
     end;
 handle_call({done, Now, Ref}, _From, #state { tasks = TID, task_count = TC } = State) ->
-    true = erlang:demonitor(Ref),
-    true = ets:delete(TID, Ref),
+    ok = untrack_process(TID, Ref),
     {reply, ok, process_queue(Now, State#state { task_count = TC - 1}) };
 handle_call(Request, _From, State) ->
     lager:error("Unknown call request: ~p", [Request]),
     Reply = ok,
     {reply, Reply, State}.
+
 
 %% @private
 handle_cast(_Msg, State) ->
@@ -232,15 +234,15 @@ process_queue(_Now, 0, Q, _QT, _TID, Started) ->
 process_queue(Now, K, Q, QT, TID, Started) ->
     case QT:out(Now, Q) of
         {drop, Dropped, Q2} ->
-            drop(Dropped),
+            drop(TID, Dropped),
             process_queue(Now, K, Q2, QT, TID, Started);
-        { {From, Ref}, Dropped, Q2} ->
-            drop(Dropped),
+        {{From, Ref}, Dropped, Q2} ->
+            drop(TID, Dropped),
             gen_server:reply(From, {go, Ref}),
             true = ets:insert(TID, {Ref, working}),
             process_queue(Now, K-1, Q2, QT, TID, Started+1);
         {empty, Dropped, Q2} ->
-            drop(Dropped),
+            drop(TID, Dropped),
             {Started, Q2}
     end.
 
@@ -268,9 +270,19 @@ set_timer(#conf { hz = undefined }) -> ok;
 set_timer(#conf { hz = Hz }) ->
     erlang:send_after(Hz, self(), replenish).
 
-drop(Tasks) ->
+drop(TID, Tasks) ->
     [begin
-        erlang:demonitor(Ref, [flush]),
+        ok = untrack_process(TID, Ref),
         gen_server:reply(From, {error, overload})
      end || {From, Ref} <- Tasks],
     ok.
+
+untrack_process(TID, Ref) ->
+    true = erlang:demonitor(Ref, [flush]),
+    true = ets:delete(TID, Ref),
+    ok.
+
+track_process(Tab, Ref, State) ->
+    true = ets:insert_new(Tab, {Ref, State}),
+    ok.
+
