@@ -66,6 +66,29 @@ initial_state() ->
       	rate = state_range(5)
     }).
 
+%% ENQUEUING ON A FULL QUEUE
+%% ----------------------------------------------------------------------
+enq_while_full() ->
+    Ctl = self(),
+    Ref = make_ref(),
+    spawn(fun() ->
+        R = sv:ask(?Q, sv:timestamp()),
+        Ctl ! {ok, Ref, R}
+    end),
+    receive
+      {ok, Ref, R} -> R
+    after 500 ->
+      {error, timeout}
+    end.
+    
+enq_while_full_pre(#state { asking = As, max_asking = MaxAs }) ->
+    length(As) == MaxAs.
+
+enq_while_full_args(_S) -> [].
+
+enq_while_full_callouts(_S, []) ->
+    ?RET({error, queue_full}).
+
 %% TASKS
 %% ----------------------------------------------------------------------
 %%
@@ -310,6 +333,9 @@ end_work(Pid) ->
 %% ----------------------------------------------------------------------
 postcondition_common(S, Call, Res) ->
     eq(Res, return_value(S, Call)).
+
+weight(_S, enq_while_full) -> 40;
+weight(_, _) -> 10.
 
 set_queue(
         #state {
