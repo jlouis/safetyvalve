@@ -18,6 +18,14 @@ See the document USING.md for a usage example.
 
 # Changes
 
+### v2.5.0
+
+This release adds a new feature and fixes a grave bug introduced in v2.4.0.
+
+The bug has to do with terminating processes which got rejected on the queue due to the queue being full. This test was not covered by the QuickCheck model, and as such, it escaped scrutiny.
+
+In addition, this release adds the ability to create queues dynamically, provided by Luis Rascão. Some systems are better off creating queues as they go along in the system, rather than keeping a small set of static queues present.
+
 ### v2.4.0
 
 This release changes some important internals inside SV. There is a tracking table of the processes we are currently doing work for. This table was a `gb_set` but it has been changed to an (unnamed) ETS table. This means each queue now takes two ETS tables to operate if you run with the default queue settings. If your system has many ETS tables, this may be a problem.
