@@ -53,7 +53,7 @@ prop_observations() ->
     ?FORALL(M, g_model(),
 	begin
             #model { t = T, st = ST} = Res = eval(M),
-            R = sv_codel:dequeue(T+1, ST),
+            R = sv_codel:dequeue({T+1, erlang:unique_integer()}, ST),
             cleanup(Res),
             case R of
                 {empty, _Dropped, EmptyState} ->
@@ -68,7 +68,7 @@ prop_observations() ->
         	end).
 
 
-verify_dropped(CoDelState) ->
+verify_dropped(_CoDelState) ->
     %% We dropped packets, our state must be dropping
     classify(true, dropped, true).
 
@@ -99,11 +99,13 @@ advance_time(#model { t = T } = State, K) ->
     State#model { t = T + K  }.
 
 enqueue(#model { t = T, st = ST } = State) ->
-	State#model { t = T+1, st = sv_codel:enqueue({pkt, T}, T, ST) }.
+    TS = {T, erlang:unique_integer()},
+    State#model { t = T+1, st = sv_codel:enqueue({pkt, TS}, TS, ST) }.
 	
 dequeue(#model { t = T, st = ST } = State) ->
+    TS = {T, erlang:unique_integer()},
     ST2 =
-    	case sv_codel:dequeue(T, ST) of
+    	case sv_codel:dequeue(TS, ST) of
     	    {_, _, S} -> S
     	end,
     State#model { t = T+1, st = ST2 }.
