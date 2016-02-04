@@ -36,7 +36,7 @@ start_queue(Queue, Conf) ->
 
 -spec stop_queue(Queue) -> ok | {error, not_found | simple_one_for_one}
     when
-        Queue :: undefined | atom().
+        Queue :: undefined | pid() | atom().
 stop_queue(Queue) when is_pid(Queue) ->
     supervisor:terminate_child(?MODULE, Queue);
 stop_queue(Queue) when is_atom(Queue) ->

@@ -25,7 +25,7 @@ new(Queue, Conf) ->
 %% @end
 -spec destroy(Queue) -> ok | {error, not_found | simple_one_for_one}
     when
-      Queue :: undefined | atom().
+      Queue :: undefined | pid() | atom().
 destroy(Queue) ->
     safetyvalve_sup:stop_queue(Queue).
 
