@@ -18,6 +18,10 @@ See the document USING.md for a usage example.
 
 # Changes
 
+### v2.5.1
+
+This release introduces better type specifications to quell the dialyzer, thanks to work by Luis Rascão
+
 ### v2.5.0
 
 This release adds a new feature and fixes a grave bug introduced in v2.4.0.
