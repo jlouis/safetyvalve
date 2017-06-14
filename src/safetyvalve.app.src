@@ -8,7 +8,10 @@
                   stdlib,
                   lager
                  ]},
-  {modules, []},                 
+  {modules, []},
   {mod, { safetyvalve_app, []}},
-  {env, []}
+  {env, []},
+  {maintainers, ["Jesper Louis Andersen"]},
+  {licenses, ["Apache 2"]},
+  {links, [{"Github", "https://github.com/jlouis/safetyvalve"}]}
  ]}.
